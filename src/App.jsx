@@ -259,7 +259,7 @@ Respond ONLY with valid JSON (no markdown):
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim());
       setGoalData(parsed);
-      if (!parsed.valid) { setAnalysing(false); return; }
+      if (!parsed.valid) { parsed.valid = true; parsed.isVague = true; parsed.clarifyingQ = parsed.clarifyingQ || "What would success look like for you in 90 days?"; }
       if (parsed.isVague) { setObScreen(2); }
       else {
         setFinalGoal(parsed.refinedGoal || trimmed);
