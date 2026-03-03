@@ -235,7 +235,7 @@ USER INPUT:
 TASK: Evaluate this goal and prepare it for a habit-building system.
 
 RULES:
-1. A goal is INVALID only if gibberish or offensive. Everything else is valid.
+1. A goal is INVALID only if it is complete gibberish (random letters, keyboard smash) or explicitly violent/harmful. Everything else is VALID — even ambitious, vague, unrealistic, or money-related goals. Goals about wealth, money, fitness, relationships, fame, or any personal aspiration are ALWAYS valid. Your job is not to judge the goal, only to clarify it if vague.
 2. A goal is VAGUE if it lacks a specific domain, measurable indicator, or timeframe.
 3. If VAGUE, generate ONE clarifying question: warm, max 15 words, targeting the most missing element. Never ask "why" — ask "what" or "how".
 4. If CLEAR, generate:
