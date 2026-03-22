@@ -250,56 +250,67 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 {"schedule":{"mon":[{"habitIdx":0,"timeSlot":"morning"}],"tue":[...],"wed":[...],"thu":[...],"fri":[...],"sat":[...],"sun":[...]}}`;
 }
 
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = "onepercent_state";
+function loadSaved() {
+  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+}
+function saveState(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
 // ─── PROVIDER ─────────────────────────────────────────────────────────────────
 function AppProvider({ children }) {
-  const [firstTime, setFirstTime] = useState(true);
+  const saved = useRef(loadSaved()).current;
+
+  const [firstTime, setFirstTime] = useState(saved ? false : true);
   const [uspSlide, setUspSlide] = useState(0);
 
   // ONBOARDING PHASES: "areas" → "chat" → "struggles" → "habits" → "calendar" → "ready"
   const [obPhase, setObPhase] = useState("areas");
-  const [selectedAreas, setSelectedAreas] = useState([]);
+  const [selectedAreas, setSelectedAreas] = useState(saved?.selectedAreas || []);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [coachReady, setCoachReady] = useState(false);
-  const [extractedData, setExtractedData] = useState(null);
+  const [extractedData, setExtractedData] = useState(saved?.extractedData || null);
   const [extracting, setExtracting] = useState(false);
 
   // STRUGGLES
-  const [struggles, setStruggles] = useState([]);
+  const [struggles, setStruggles] = useState(saved?.struggles || []);
 
   // HABIT BUILDER
   const [suggestedHabits, setSuggestedHabits] = useState([]);
-  const [userHabits, setUserHabits] = useState([]); // { id, action, area, trigger?, days[], timeSlot }
+  const [userHabits, setUserHabits] = useState(saved?.userHabits || []); // { id, action, area, trigger?, days[], timeSlot }
   const [loadingHabits, setLoadingHabits] = useState(false);
   const [newHabitText, setNewHabitText] = useState("");
   const [newHabitArea, setNewHabitArea] = useState(null);
 
   // CONFIG
-  const [dailyLoad, setDailyLoad] = useState(2);
-  const [difficulty, setDifficulty] = useState("medium");
+  const [dailyLoad, setDailyLoad] = useState(saved?.dailyLoad || 2);
+  const [difficulty, setDifficulty] = useState(saved?.difficulty || "medium");
 
   // WEEK CALENDAR (user-editable)
-  const [weekSchedule, setWeekSchedule] = useState(null); // { mon: [...], tue: [...], ... }
+  const [weekSchedule, setWeekSchedule] = useState(saved?.weekSchedule || null); // { mon: [...], tue: [...], ... }
   const [loadingSchedule, setLoadingSchedule] = useState(false);
 
   // PLANS (legacy — replaced by weekSchedule but kept for replan)
   const [planOptions, setPlanOptions] = useState(null);
   const [loadingPlans, setLoadingPlans] = useState(false);
-  const [selectedPlanIdx, setSelectedPlanIdx] = useState(null);
-  const [weekPlan, setWeekPlan] = useState(null);
+  const [selectedPlanIdx, setSelectedPlanIdx] = useState(saved?.selectedPlanIdx ?? null);
+  const [weekPlan, setWeekPlan] = useState(saved?.weekPlan || null);
 
   // APP STATE
-  const [screen, setScreen] = useState("usp");
-  const [dayNumber, setDayNumber] = useState(1);
-  const [weekDay, setWeekDay] = useState(0);
-  const [checked, setChecked] = useState({});
-  const [partialChecked, setPartialChecked] = useState({});
+  const [screen, setScreen] = useState(saved?.weekPlan ? "today" : "usp");
+  const [dayNumber, setDayNumber] = useState(saved?.dayNumber || 1);
+  const [weekDay, setWeekDay] = useState(saved?.weekDay || 0);
+  const [checked, setChecked] = useState(saved?.checked || {});
+  const [partialChecked, setPartialChecked] = useState(saved?.partialChecked || {});
   const [expandedAction, setExpandedAction] = useState(null);
-  const [completionHistory, setCompletionHistory] = useState([]);
-  const [checkinDone, setCheckinDone] = useState(false);
-  const [checkinChoice, setCheckinChoice] = useState(null);
-  const [checkinNote, setCheckinNote] = useState("");
+  const [completionHistory, setCompletionHistory] = useState(saved?.completionHistory || []);
+  const [checkinDone, setCheckinDone] = useState(saved?.checkinDone || false);
+  const [checkinChoice, setCheckinChoice] = useState(saved?.checkinChoice || null);
+  const [checkinNote, setCheckinNote] = useState(saved?.checkinNote || "");
   const [showWritePrompt, setShowWritePrompt] = useState(false);
   const [comebackMode, setComebackMode] = useState(false);
   const [isReturning, setIsReturning] = useState(false);
@@ -317,6 +328,19 @@ function AppProvider({ children }) {
   const daysWithActivity = completionHistory.filter(d => d.completed > 0 || d.partial > 0).length;
   const consistencyPct = totalDaysTracked > 0 ? Math.round((daysWithActivity / totalDaysTracked) * 100) : 0;
   const earnedMilestones = MILESTONES.filter(m => dayNumber >= m.day);
+
+  // ── Persist state to localStorage ──────────────────────────────────────────
+  useEffect(() => {
+    if (!weekPlan) return; // don't save until onboarding is complete
+    saveState({
+      selectedAreas, extractedData, struggles, userHabits,
+      dailyLoad, difficulty, weekSchedule, selectedPlanIdx, weekPlan,
+      dayNumber, weekDay, checked, partialChecked,
+      completionHistory, checkinDone, checkinChoice, checkinNote,
+    });
+  }, [selectedAreas, extractedData, struggles, userHabits, dailyLoad, difficulty,
+      weekSchedule, selectedPlanIdx, weekPlan, dayNumber, weekDay, checked,
+      partialChecked, completionHistory, checkinDone, checkinChoice, checkinNote]);
 
   // ── Area selection ─────────────────────────────────────────────────────────
   function toggleArea(id) {
