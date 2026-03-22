@@ -642,6 +642,73 @@ function AppProvider({ children }) {
 
   function dismissMilestone() { setMilestone(null); }
 
+  // ── Edit plan (triggers, recurrence, schedule) ────────────────────────────
+  function updateTrigger(dayKey, actionIdx, trigger) {
+    setWeekPlan(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, days: { ...prev.days } };
+      next.days[dayKey] = [...next.days[dayKey]];
+      next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], selectedTrigger: trigger };
+      return next;
+    });
+  }
+
+  function updateActionInPlan(dayKey, actionIdx, updates) {
+    setWeekPlan(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, days: { ...prev.days } };
+      next.days[dayKey] = [...next.days[dayKey]];
+      next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], ...updates };
+      return next;
+    });
+  }
+
+  function removeActionFromPlan(dayKey, actionIdx) {
+    setWeekPlan(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, days: { ...prev.days } };
+      next.days[dayKey] = next.days[dayKey].filter((_, i) => i !== actionIdx);
+      return next;
+    });
+  }
+
+  function addActionToPlan(dayKey, action, timeSlot) {
+    setWeekPlan(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, days: { ...prev.days } };
+      next.days[dayKey] = [...(next.days[dayKey] || []), { ...action, timeSlot }];
+      return next;
+    });
+  }
+
+  function setActionRecurrence(dayKey, actionIdx, frequency) {
+    // frequency: "daily", "weekdays", "3x", "2x", "1x"
+    const action = weekPlan?.days?.[dayKey]?.[actionIdx];
+    if (!action) return;
+    const updated = { ...action, frequency };
+
+    setWeekPlan(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, days: { ...prev.days } };
+      // First remove this action from all days
+      DAYS.forEach(d => {
+        const dk = d.toLowerCase();
+        next.days[dk] = (next.days[dk] || []).filter(a => a.action !== action.action || a.area !== action.area);
+      });
+      // Then add to appropriate days based on frequency
+      let targetDays;
+      if (frequency === "daily") targetDays = DAYS.map(d => d.toLowerCase());
+      else if (frequency === "weekdays") targetDays = ["mon","tue","wed","thu","fri"];
+      else if (frequency === "3x") targetDays = ["mon","wed","fri"];
+      else if (frequency === "2x") targetDays = ["tue","thu"];
+      else targetDays = [dayKey]; // 1x
+      targetDays.forEach(dk => {
+        next.days[dk] = [...(next.days[dk] || []), { ...updated }];
+      });
+      return next;
+    });
+  }
+
   return (
     <AppCtx.Provider value={{
       firstTime, setFirstTime, uspSlide, setUspSlide,
@@ -655,7 +722,8 @@ function AppProvider({ children }) {
       weekSchedule, loadingSchedule, buildSchedule, moveAction, removeFromSchedule, addToSchedule, confirmSchedule,
       dailyLoad, setDailyLoad, difficulty, setDifficulty,
       planOptions, loadingPlans, selectedPlanIdx, confirmPlan, generatePlans,
-      weekPlan, enterApp,
+      weekPlan, setWeekPlan, enterApp,
+      updateTrigger, updateActionInPlan, removeActionFromPlan, addActionToPlan, setActionRecurrence,
       screen, setScreen,
       dayNumber, weekDay, todayKey, todayActions, tomorrowActions,
       checked, partialChecked, toggleComplete, togglePartial,
@@ -692,6 +760,7 @@ function Shell() {
         {screen === "onboarding" && <Onboarding />}
         {screen === "today" && <TodayScreen />}
         {screen === "nudges" && <NudgesScreen />}
+        {screen === "edit-schedule" && <EditScheduleScreen />}
         {screen === "reflection" && <ReflectionScreen />}
         {screen === "progress" && <ProgressScreen />}
         {screen === "replan" && <ReplanScreen />}
@@ -1241,11 +1310,13 @@ function TodayScreen() {
 }
 
 function ActionCard({ idx, action, done, partial, expanded, onExpand, onComplete, onPartial }) {
+  const { updateTrigger, todayKey, setActionRecurrence } = useApp();
   const a = action;
   const area = LIFE_AREAS.find(la => la.id === a.area);
   const cls = done ? " ac-done" : partial ? " ac-partial" : "";
   const trigger = a.selectedTrigger || a.trigger || (a.suggestedTriggers?.[0]) || "";
   const timeLabel = a.timeSlot === "morning" ? "☀️ Morning" : a.timeSlot === "midday" ? "🌤️ Midday" : a.timeSlot === "afternoon" ? "🌅 Afternoon" : a.timeSlot === "evening" ? "🌙 Evening" : "";
+  const freqLabels = { daily: "Every day", weekdays: "Weekdays", "3x": "3x/week", "2x": "2x/week", "1x": "1x/week" };
 
   return (
     <div className={`acard${cls}`}>
@@ -1270,7 +1341,9 @@ function ActionCard({ idx, action, done, partial, expanded, onExpand, onComplete
               <span className="ad-l">Trigger</span>
               <div className="ad-trigger-opts">
                 {a.suggestedTriggers.map((t, ti) => (
-                  <button key={ti} className={`ad-trig-btn${(a.selectedTrigger || a.suggestedTriggers[0]) === t ? " ad-trig-on" : ""}`}>
+                  <button key={ti}
+                    className={`ad-trig-btn${(a.selectedTrigger || a.suggestedTriggers[0]) === t ? " ad-trig-on" : ""}`}
+                    onClick={() => updateTrigger(todayKey, idx, t)}>
                     {t}
                   </button>
                 ))}
@@ -1278,6 +1351,18 @@ function ActionCard({ idx, action, done, partial, expanded, onExpand, onComplete
             </div>
           )}
           {!a.suggestedTriggers && trigger && <div className="ad-row"><span className="ad-l">Trigger</span><span className="ad-v">{trigger}</span></div>}
+          <div className="ad-triggers">
+            <span className="ad-l">Frequency</span>
+            <div className="ad-trigger-opts">
+              {Object.entries(freqLabels).map(([k, v]) => (
+                <button key={k}
+                  className={`ad-trig-btn${(a.frequency || "1x") === k ? " ad-trig-on" : ""}`}
+                  onClick={() => setActionRecurrence(todayKey, idx, k)}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
           {a.twoMin && <div className="ad-row"><span className="ad-l">Hard day</span><span className="ad-v">{a.twoMin}</span></div>}
           {a.identity && <div className="ad-row"><span className="ad-l">Identity</span><span className="ad-v">{a.identity}</span></div>}
         </div>
@@ -1543,11 +1628,94 @@ function ReplanScreen() {
 }
 
 // ─── SHARED ───────────────────────────────────────────────────────────────────
+function EditScheduleScreen() {
+  const { weekPlan, setWeekPlan, removeActionFromPlan, addActionToPlan, userHabits, setScreen } = useApp();
+  const [showAddModal, setShowAddModal] = useState(null); // { day, slot }
+
+  if (!weekPlan) return null;
+
+  const timeSlots = ["morning", "midday", "afternoon", "evening"];
+  const slotLabels = { morning: "☀️ Morning", midday: "🌤️ Midday", afternoon: "🌅 Afternoon", evening: "🌙 Evening" };
+
+  // Collect all unique actions from the plan for the add modal
+  const allActions = [];
+  const seen = new Set();
+  DAYS.forEach(d => {
+    (weekPlan.days[d.toLowerCase()] || []).forEach(a => {
+      const key = a.action + a.area;
+      if (!seen.has(key)) { seen.add(key); allActions.push(a); }
+    });
+  });
+  (userHabits || []).forEach(h => {
+    const key = h.action + h.area;
+    if (!seen.has(key)) { seen.add(key); allActions.push(h); }
+  });
+
+  return (
+    <div className="screen pad fade-in">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2 className="ob-h" style={{ fontSize: 22, margin: 0 }}>Edit Schedule</h2>
+        <button className="ghost-btn" onClick={() => setScreen("today")}>Done</button>
+      </div>
+      <p className="ob-p">Tap x to remove, + to add actions to any time slot.</p>
+
+      {DAYS.map((d, di) => {
+        const dayKey = d.toLowerCase();
+        const actions = weekPlan.days[dayKey] || [];
+        return (
+          <div key={d} className="es-day">
+            <p className="es-day-label">{DAY_FULL[di]}</p>
+            {timeSlots.map(slot => {
+              const slotActions = actions.map((a, i) => ({ ...a, origIdx: i })).filter(a => a.timeSlot === slot);
+              return (
+                <div key={slot} className="es-slot">
+                  <span className="es-slot-label">{slotLabels[slot]}</span>
+                  <div className="es-slot-actions">
+                    {slotActions.map(a => {
+                      const area = LIFE_AREAS.find(la => la.id === a.area);
+                      return (
+                        <div key={a.origIdx} className="es-action">
+                          <span className="es-action-dot" style={{ background: area?.color || "#999" }} />
+                          <span className="es-action-name">{a.action}</span>
+                          <button className="es-remove" onClick={() => removeActionFromPlan(dayKey, a.origIdx)}>x</button>
+                        </div>
+                      );
+                    })}
+                    <button className="es-add-btn" onClick={() => setShowAddModal({ day: dayKey, slot })}>+</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {showAddModal && (
+        <div className="es-modal-bg" onClick={() => setShowAddModal(null)}>
+          <div className="es-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="es-modal-title">Add to {DAY_FULL[DAYS.findIndex(d => d.toLowerCase() === showAddModal.day)]} — {slotLabels[showAddModal.slot]}</h3>
+            {allActions.map((a, i) => {
+              const area = LIFE_AREAS.find(la => la.id === a.area);
+              return (
+                <button key={i} className="es-modal-item" onClick={() => { addActionToPlan(showAddModal.day, a, showAddModal.slot); setShowAddModal(null); }}>
+                  <span className="es-action-dot" style={{ background: area?.color || "#999" }} />
+                  {a.action}
+                </button>
+              );
+            })}
+            <button className="ghost-btn" style={{ marginTop: 8 }} onClick={() => setShowAddModal(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BottomNav() {
   const { screen, setScreen } = useApp();
   const tabs = [
     { id: "today", icon: "◎", label: "Today" },
-    { id: "nudges", icon: "💡", label: "Nudge" },
+    { id: "edit-schedule", icon: "📅", label: "Schedule" },
     { id: "reflection", icon: "◐", label: "Check-in" },
     { id: "progress", icon: "↗", label: "Progress" },
   ];
@@ -1889,4 +2057,23 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg,#FAFAF8)
 .bnav{display:flex;background:var(--bg);border-top:1px solid var(--border);padding:10px 0 calc(10px + env(safe-area-inset-bottom));flex-shrink:0;position:sticky;bottom:0;}
 .nbtn{flex:1;background:none;border:none;cursor:pointer;padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0.26;transition:0.15s;}.nbtn-on{opacity:1;}
 .nico{font-size:18px;color:var(--ink);}.nlbl{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink);font-weight:600;}
+
+/* Edit Schedule */
+.es-day{margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:16px;}
+.es-day-label{font-family:var(--font-display);font-size:18px;color:var(--ink);margin-bottom:8px;}
+.es-slot{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;min-height:32px;}
+.es-slot-label{font-size:11px;font-weight:600;color:var(--muted);min-width:90px;padding-top:6px;}
+.es-slot-actions{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.es-action{display:flex;align-items:center;gap:6px;background:var(--warm);border-radius:10px;padding:6px 10px;font-size:13px;color:var(--ink);}
+.es-action-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.es-action-name{font-weight:500;}
+.es-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;font-weight:700;}
+.es-remove:hover{color:var(--ink);}
+.es-add-btn{width:28px;height:28px;border-radius:50%;border:1.5px dashed var(--border);background:none;color:var(--muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.es-add-btn:hover{border-color:var(--ink);color:var(--ink);}
+.es-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
+.es-modal{background:var(--bg);border-radius:20px 20px 0 0;padding:20px 22px calc(20px + env(safe-area-inset-bottom));width:100%;max-width:480px;max-height:60vh;overflow-y:auto;}
+.es-modal-title{font-family:var(--font-display);font-size:18px;color:var(--ink);margin-bottom:12px;}
+.es-modal-item{display:flex;align-items:center;gap:10px;width:100%;background:var(--warm);border:none;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;margin-bottom:6px;font-family:var(--font-body);text-align:left;}
+.es-modal-item:hover{background:var(--border);}
 `;
