@@ -655,18 +655,29 @@ function AppProvider({ children }) {
   }
 
   function addToSchedule(day, habit, timeSlot) {
-    setWeekSchedule(prev => ({
-      ...prev,
-      [day]: [...(prev[day] || []), { ...habit, timeSlot }]
-    }));
+    setWeekSchedule(prev => {
+      const dayActions = prev[day] || [];
+      // Enforce: max 1 action per time slot per day
+      if (dayActions.some(a => a.timeSlot === timeSlot)) return prev;
+      // Enforce: max 5 actions per day
+      if (dayActions.length >= 5) return prev;
+      return {
+        ...prev,
+        [day]: [...dayActions, { ...habit, timeSlot, id: `a_${Date.now()}_${Math.random().toString(36).slice(2,7)}` }]
+      };
+    });
   }
 
   function confirmSchedule() {
-    // Convert weekSchedule to weekPlan format
+    // Convert weekSchedule to weekPlan format, ensuring all actions have unique IDs
+    const daysWithIds = {};
+    for (const [dayKey, actions] of Object.entries(weekSchedule)) {
+      daysWithIds[dayKey] = (actions || []).map(a => a.id ? a : { ...a, id: `a_${Date.now()}_${Math.random().toString(36).slice(2,7)}` });
+    }
     const plan = {
       name: "My Plan",
       philosophy: extractedData?.key_insight || "1% better every day",
-      days: weekSchedule,
+      days: daysWithIds,
     };
     setWeekPlan(plan);
     setObPhase("ready");
@@ -777,9 +788,16 @@ RE-PLANNING RULES:
   function updateTrigger(dayKey, actionIdx, trigger) {
     setWeekPlan(prev => {
       if (!prev) return prev;
+      const action = prev.days[dayKey]?.[actionIdx];
+      if (!action) return prev;
       const next = { ...prev, days: { ...prev.days } };
       next.days[dayKey] = [...next.days[dayKey]];
-      next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], selectedTrigger: trigger };
+      // Prefer id matching, fall back to index
+      if (action.id) {
+        next.days[dayKey] = next.days[dayKey].map(a => a.id === action.id ? { ...a, selectedTrigger: trigger } : a);
+      } else {
+        next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], selectedTrigger: trigger };
+      }
       return next;
     });
   }
@@ -787,9 +805,16 @@ RE-PLANNING RULES:
   function updateActionInPlan(dayKey, actionIdx, updates) {
     setWeekPlan(prev => {
       if (!prev) return prev;
+      const action = prev.days[dayKey]?.[actionIdx];
+      if (!action) return prev;
       const next = { ...prev, days: { ...prev.days } };
       next.days[dayKey] = [...next.days[dayKey]];
-      next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], ...updates };
+      // Prefer id matching, fall back to index
+      if (action.id) {
+        next.days[dayKey] = next.days[dayKey].map(a => a.id === action.id ? { ...a, ...updates } : a);
+      } else {
+        next.days[dayKey][actionIdx] = { ...next.days[dayKey][actionIdx], ...updates };
+      }
       return next;
     });
   }
@@ -797,8 +822,15 @@ RE-PLANNING RULES:
   function removeActionFromPlan(dayKey, actionIdx) {
     setWeekPlan(prev => {
       if (!prev) return prev;
+      const action = prev.days[dayKey]?.[actionIdx];
+      if (!action) return prev;
       const next = { ...prev, days: { ...prev.days } };
-      next.days[dayKey] = next.days[dayKey].filter((_, i) => i !== actionIdx);
+      // Prefer id matching, fall back to index
+      if (action.id) {
+        next.days[dayKey] = next.days[dayKey].filter(a => a.id !== action.id);
+      } else {
+        next.days[dayKey] = next.days[dayKey].filter((_, i) => i !== actionIdx);
+      }
       return next;
     });
   }
@@ -806,8 +838,13 @@ RE-PLANNING RULES:
   function addActionToPlan(dayKey, action, timeSlot) {
     setWeekPlan(prev => {
       if (!prev) return prev;
+      const dayActions = prev.days[dayKey] || [];
+      // Enforce: max 1 action per time slot per day
+      if (dayActions.some(a => a.timeSlot === timeSlot)) return prev;
+      // Enforce: max 5 actions per day
+      if (dayActions.length >= 5) return prev;
       const next = { ...prev, days: { ...prev.days } };
-      next.days[dayKey] = [...(next.days[dayKey] || []), { ...action, timeSlot }];
+      next.days[dayKey] = [...dayActions, { ...action, timeSlot, id: `a_${Date.now()}_${Math.random().toString(36).slice(2,7)}` }];
       return next;
     });
   }
@@ -821,12 +858,14 @@ RE-PLANNING RULES:
     setWeekPlan(prev => {
       if (!prev) return prev;
       const next = { ...prev, days: { ...prev.days } };
-      // First remove this action from all days
+      // First remove this action from all days (prefer id matching, fall back to text+area)
       DAYS.forEach(d => {
         const dk = d.toLowerCase();
-        next.days[dk] = (next.days[dk] || []).filter(a => a.action !== action.action || a.area !== action.area);
+        next.days[dk] = (next.days[dk] || []).filter(a =>
+          action.id ? a.id !== action.id : (a.action !== action.action || a.area !== action.area)
+        );
       });
-      // Then add to appropriate days based on frequency
+      // Then add to appropriate days based on frequency, each gets a new unique id
       let targetDays;
       if (frequency === "daily") targetDays = DAYS.map(d => d.toLowerCase());
       else if (frequency === "weekdays") targetDays = ["mon","tue","wed","thu","fri"];
@@ -834,7 +873,7 @@ RE-PLANNING RULES:
       else if (frequency === "2x") targetDays = ["tue","thu"];
       else targetDays = [dayKey]; // 1x
       targetDays.forEach(dk => {
-        next.days[dk] = [...(next.days[dk] || []), { ...updated }];
+        next.days[dk] = [...(next.days[dk] || []), { ...updated, id: `a_${Date.now()}_${Math.random().toString(36).slice(2,7)}` }];
       });
       return next;
     });
@@ -890,7 +929,7 @@ function Shell() {
         {screen === "usp" && <USPCarousel />}
         {screen === "onboarding" && <Onboarding />}
         {screen === "today" && <TodayScreen />}
-        {screen === "nudges" && <NudgesScreen />}
+
         {screen === "edit-schedule" && <EditScheduleScreen />}
         {screen === "reflection" && <ReflectionScreen />}
         {screen === "progress" && <ProgressScreen />}
@@ -1554,33 +1593,6 @@ function ProgressRing({ done, total, size }) {
   );
 }
 
-// ─── NUDGES ───────────────────────────────────────────────────────────────────
-function NudgesScreen() {
-  const { todayActions, checked, completedCount, totalActions, setScreen, weekDay, extractedData } = useApp();
-  const insight = extractedData?.key_insight;
-  return (
-    <div className="screen pad">
-      <p className="eyebrow">Daily nudge · {DAY_FULL[weekDay]}</p>
-      <div className="nudge-card fade-in">
-        <span className="nudge-icon">🔑</span>
-        <p className="nudge-msg">{insight || "Each action is a vote for who you're becoming."}</p>
-      </div>
-      <div className="nudge-status">
-        <p className="ns-lbl">Today's actions</p>
-        {todayActions.map((a, i) => {
-          const area = LIFE_AREAS.find(la => la.id === a.area);
-          return (
-            <div key={i} className={`mpill${checked[i] ? " mpill-done" : ""}`}>
-              <span style={{ color: area?.color }}>{area?.icon || "○"}</span><span>{a.action}</span>
-            </div>
-          );
-        })}
-        <p className="ns-count">{completedCount} of {totalActions} done</p>
-      </div>
-      <button className="btn-primary" onClick={() => setScreen("today")}>Back to today</button>
-    </div>
-  );
-}
 
 // ─── REFLECTION ───────────────────────────────────────────────────────────────
 function ReflectionScreen() {
@@ -1865,7 +1877,8 @@ function Dots({ label }) {
 // ─── FALLBACK PLANS ───────────────────────────────────────────────────────────
 function generateFallbackPlans(load, areas) {
   const a = areas[0] || "health";
-  const makeDay = (acts) => acts.slice(0, load);
+  const uid = () => `a_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+  const makeDay = (acts) => acts.map(act => ({ ...act, id: uid() })).slice(0, load);
   const triggers = ["After I pour my morning coffee","After I sit down at my desk","After I eat dinner"];
   return [
     { name: "Balanced Rhythm", philosophy: "Touch every area across the week.",
