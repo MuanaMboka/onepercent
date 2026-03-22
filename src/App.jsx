@@ -263,16 +263,19 @@ function saveState(data) {
 function AppProvider({ children }) {
   const saved = useRef(loadSaved()).current;
 
+  // Determine initial screen: completed onboarding → "today", mid-onboarding → "onboarding", fresh → "usp"
+  const initScreen = saved?.weekPlan ? "today" : saved?.obPhase ? "onboarding" : "usp";
+
   const [firstTime, setFirstTime] = useState(saved ? false : true);
   const [uspSlide, setUspSlide] = useState(0);
 
   // ONBOARDING PHASES: "areas" → "chat" → "struggles" → "habits" → "calendar" → "ready"
-  const [obPhase, setObPhase] = useState("areas");
+  const [obPhase, setObPhase] = useState(saved?.obPhase || "areas");
   const [selectedAreas, setSelectedAreas] = useState(saved?.selectedAreas || []);
-  const [chatMessages, setChatMessages] = useState([]);
+  const [chatMessages, setChatMessages] = useState(saved?.chatMessages || []);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [coachReady, setCoachReady] = useState(false);
+  const [coachReady, setCoachReady] = useState(saved?.coachReady || false);
   const [extractedData, setExtractedData] = useState(saved?.extractedData || null);
   const [extracting, setExtracting] = useState(false);
 
@@ -280,7 +283,7 @@ function AppProvider({ children }) {
   const [struggles, setStruggles] = useState(saved?.struggles || []);
 
   // HABIT BUILDER
-  const [suggestedHabits, setSuggestedHabits] = useState([]);
+  const [suggestedHabits, setSuggestedHabits] = useState(saved?.suggestedHabits || []);
   const [userHabits, setUserHabits] = useState(saved?.userHabits || []); // { id, action, area, trigger?, days[], timeSlot }
   const [loadingHabits, setLoadingHabits] = useState(false);
   const [newHabitText, setNewHabitText] = useState("");
@@ -301,7 +304,7 @@ function AppProvider({ children }) {
   const [weekPlan, setWeekPlan] = useState(saved?.weekPlan || null);
 
   // APP STATE
-  const [screen, setScreen] = useState(saved?.weekPlan ? "today" : "usp");
+  const [screen, setScreen] = useState(initScreen);
   const [dayNumber, setDayNumber] = useState(saved?.dayNumber || 1);
   const [weekDay, setWeekDay] = useState(saved?.weekDay || 0);
   const [checked, setChecked] = useState(saved?.checked || {});
@@ -329,16 +332,17 @@ function AppProvider({ children }) {
   const consistencyPct = totalDaysTracked > 0 ? Math.round((daysWithActivity / totalDaysTracked) * 100) : 0;
   const earnedMilestones = MILESTONES.filter(m => dayNumber >= m.day);
 
-  // ── Persist state to localStorage ──────────────────────────────────────────
+  // ── Persist state to localStorage (saves at every stage, including mid-onboarding) ──
   useEffect(() => {
-    if (!weekPlan) return; // don't save until onboarding is complete
     saveState({
-      selectedAreas, extractedData, struggles, userHabits,
+      obPhase, selectedAreas, chatMessages, coachReady, extractedData,
+      struggles, suggestedHabits, userHabits,
       dailyLoad, difficulty, weekSchedule, selectedPlanIdx, weekPlan,
       dayNumber, weekDay, checked, partialChecked,
       completionHistory, checkinDone, checkinChoice, checkinNote,
     });
-  }, [selectedAreas, extractedData, struggles, userHabits, dailyLoad, difficulty,
+  }, [obPhase, selectedAreas, chatMessages, coachReady, extractedData,
+      struggles, suggestedHabits, userHabits, dailyLoad, difficulty,
       weekSchedule, selectedPlanIdx, weekPlan, dayNumber, weekDay, checked,
       partialChecked, completionHistory, checkinDone, checkinChoice, checkinNote]);
 
@@ -353,6 +357,8 @@ function AppProvider({ children }) {
   // ── Chat with coach ────────────────────────────────────────────────────────
   async function startChat() {
     setObPhase("chat");
+    // If resuming a saved chat session, don't restart
+    if (chatMessages.length > 0) return;
     const areaLabels = selectedAreas.map(id => LIFE_AREAS.find(a => a.id === id)?.label).join(", ");
     const firstMsg = { role: "user", content: `I want to work on: ${areaLabels}` };
     setChatMessages([firstMsg]);
@@ -1778,7 +1784,7 @@ function generateFallbackPlans(load, areas) {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Satoshi:wght@400;500;600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg,#FAFAF8);}#root{width:100%;min-height:100vh;min-height:100dvh;}
+html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg,#FAFAF8);overscroll-behavior:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;}#root{width:100%;min-height:100vh;min-height:100dvh;}
 :root{
   --bg:#FAFAF8;--ink:#151515;--muted:#999;--border:#ECEAE6;
   --warm:#F3F2EF;--accent:#C2632A;--green:#1A6B44;--green-bg:#EDF8F2;
@@ -1841,7 +1847,8 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg,#FAFAF8)
 .chat-ready{background:var(--warm);border-radius:18px;padding:16px;text-align:center;margin-top:auto;}
 .chat-ready p{font-size:13px;color:var(--muted);margin-bottom:10px;}
 .chat-input-row{display:flex;gap:8px;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);}
-.chat-input{flex:1;background:var(--warm);border:none;border-radius:20px;padding:12px 16px;font-family:var(--font-body);font-size:14px;color:var(--ink);resize:none;outline:none;}
+.chat-input{flex:1;background:var(--warm);border:none;border-radius:20px;padding:12px 16px;font-family:var(--font-body);font-size:14px;color:var(--ink);resize:none;outline:none;-webkit-user-select:text;user-select:text;}
+textarea,input{-webkit-user-select:text;user-select:text;}
 .chat-send{width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--bg);border:none;font-size:18px;font-weight:700;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:0.15s;}
 .send-off{opacity:0.25;cursor:not-allowed;}
 
