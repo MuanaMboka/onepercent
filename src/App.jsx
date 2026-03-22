@@ -340,7 +340,7 @@ function AppProvider({ children }) {
 
   // Determine initial screen: completed onboarding → "today", mid-onboarding → "onboarding", fresh → "usp"
   // Only push to onboarding if the user actually started it (has selectedAreas). Otherwise stay on USP.
-  const initScreen = saved?.weekPlan ? "today" : (saved?.obPhase && saved?.selectedAreas?.length > 0) ? "onboarding" : "usp";
+  const initScreen = saved?.screen || (saved?.weekPlan ? "today" : (saved?.obPhase && saved?.selectedAreas?.length > 0) ? "onboarding" : "usp");
 
   const [firstTime, setFirstTime] = useState(saved ? false : true);
   const [uspSlide, setUspSlide] = useState(saved?.uspSlide || 0);
@@ -414,12 +414,12 @@ function AppProvider({ children }) {
       uspSlide, obPhase, selectedAreas, chatMessages, coachReady, extractedData,
       struggles, suggestedHabits, userHabits,
       dailyLoad, difficulty, weekSchedule, selectedPlanIdx, weekPlan,
-      dayNumber, weekDay, checked, partialChecked,
+      screen, dayNumber, weekDay, checked, partialChecked,
       completionHistory, checkinDone, checkinChoice, checkinNote,
     });
   }, [uspSlide, obPhase, selectedAreas, chatMessages, coachReady, extractedData,
       struggles, suggestedHabits, userHabits, dailyLoad, difficulty,
-      weekSchedule, selectedPlanIdx, weekPlan, dayNumber, weekDay, checked,
+      weekSchedule, selectedPlanIdx, weekPlan, screen, dayNumber, weekDay, checked,
       partialChecked, completionHistory, checkinDone, checkinChoice, checkinNote]);
 
   // ── Area selection ─────────────────────────────────────────────────────────
@@ -1327,7 +1327,7 @@ function OB_Ready() {
           </span>
         ))}
       </div>
-      {extractedData?.identity && <p className="id-line" style={{ textAlign: "center", marginBottom: 12 }}>🪞 Becoming: <strong>{extractedData.identity}</strong></p>}
+      {extractedData?.identities?.[0]?.identity && <p className="id-line" style={{ textAlign: "center", marginBottom: 12 }}>🪞 Becoming: <strong>{extractedData.identities[0].identity}</strong></p>}
       <div className="ready-plan-name">
         <p className="rpn">{weekPlan?.name}</p>
         <p className="rpp">{weekPlan?.philosophy}</p>
@@ -1410,10 +1410,10 @@ function TodayScreen() {
         ))}
       </div>
 
-      {allDone && (
+      {(completedCount > 0 || partialCount > 0) && (
         <div className="all-done fade-in">
-          <span style={{ fontSize: 34 }}>🔥</span>
-          <p className="done-msg">Done.</p>
+          <span style={{ fontSize: 34 }}>{allDone ? "🔥" : "💪"}</span>
+          <p className="done-msg">{allDone ? "Done." : "Nice progress!"}</p>
           <button className="btn-secondary" onClick={() => setScreen("reflection")}>Evening check-in</button>
         </div>
       )}
@@ -1429,15 +1429,6 @@ function TodayScreen() {
       )}
 
       <button className="plan-refresh-btn" onClick={startReplanning}>🔄 Plan next week</button>
-
-      <div className="proto">
-        <p className="proto-lbl">Prototype controls</p>
-        <div className="proto-row">
-          <button className="proto-btn" onClick={() => simulateDay(1)}>Next day</button>
-          <button className="proto-btn" onClick={() => simulateDay(2)}>Skip 1</button>
-          <button className="proto-btn" onClick={() => simulateDay(4)}>Skip 3</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1639,8 +1630,8 @@ function ProgressScreen() {
       <p className="eyebrow">Progress</p>
       <h2 className="ob-h" style={{ fontSize: 26, marginBottom: 14 }}>Progress</h2>
 
-      {extractedData?.identity && (
-        <div className="id-card stagger-1"><span>🪞</span><div><p className="id-lbl">Identity</p><p className="id-txt">Becoming: <strong>{extractedData.identity}</strong></p></div></div>
+      {extractedData?.identities?.length > 0 && (
+        <div className="id-card stagger-1"><span>🪞</span><div><p className="id-lbl">{extractedData.identities.length > 1 ? "Identities" : "Identity"}</p>{extractedData.identities.map((id, i) => <p key={i} className="id-txt">Becoming: <strong>{id.identity}</strong></p>)}</div></div>
       )}
 
       <div className="cons-card stagger-2">
