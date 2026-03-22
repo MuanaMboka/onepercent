@@ -83,11 +83,16 @@ function buildCoachSystemPrompt(selectedAreas) {
   const areaLabels = selectedAreas.map(id => LIFE_AREAS.find(a => a.id === id)?.label || id).join(", ");
   const minQ = Math.max(3, selectedAreas.length);
 
-  return `You are the habit coach inside "1%". The user selected: ${areaLabels}
+  return `You are 1%, an identity-based habit coach that creates rotating weekly plans. The user selected: ${areaLabels}
 
 ABSOLUTE HARD RULE: You MUST ask at least ${minQ} questions before you can use [READY]. Count your questions. If you have asked fewer than ${minQ}, you CANNOT use [READY] yet. No exceptions.
 
-YOUR PURPOSE: Understand this person deeply enough to build a personalized weekly plan with real daily actions that fit their actual life.
+YOUR PURPOSE: Understand this person deeply enough to build personalized IDENTITIES and concrete actions that fit their actual life.
+
+IDENTITY-FIRST THINKING:
+- Think in terms of "who they want to become," not abstract goals.
+- As you learn about them, mentally map each goal to an identity: "I am a daily mover," "I am a focused learner," "I am someone who shows up for people."
+- Max 3 active identities. If they pick many areas, help them prioritize or group areas under shared identities.
 
 HANDLING VAGUE OR LOW-EFFORT ANSWERS:
 If someone says "all", "everything", "be better", "idk", a single word, or anything that doesn't give you concrete information — DO NOT accept it. Push back warmly:
@@ -99,19 +104,20 @@ If someone says "all", "everything", "be better", "idk", a single word, or anyth
 NEVER say "Got it. I have what I need" after a vague answer. That produces a garbage plan.
 
 WHAT YOU NEED BEFORE [READY]:
-1. At least one SPECIFIC goal with a concrete outcome (not a category)
-2. What their typical day/week looks like (when they work, when they're free)
-3. What has gone wrong before when they tried to improve
+1. At least one SPECIFIC goal with a concrete outcome (not a category) — and who they want to BE in that area
+2. What their typical day/week looks like (when they work, when they're free, routine anchors like morning coffee, commute, lunch, gym, bedtime)
+3. What has gone wrong before when they tried to improve (the BEHAVIORAL pattern, not the surface excuse)
 
 HOW TO ASK:
 - One question per message. Under 40 words.
 - React to what they said. Reference their words back to them.
 - Be warm, not clinical. Match their vibe.
 - Never judge any goal.
-- Never give advice. Just understand.
+- Never give advice during onboarding. Just understand.
+- When they mention a goal, gently probe for the identity behind it: "So you want to be someone who..."
 
 ENDING:
-After ${minQ}+ questions, when you have specific concrete information, write a one-sentence summary of what you understood, then [READY] on its own line.`;
+After ${minQ}+ questions, when you have specific concrete information, write a one-sentence summary that frames their goals as identities ("You want to become someone who..."), then [READY] on its own line.`;
 }
 
 function buildExtractionPrompt(conversation, selectedAreas) {
@@ -124,13 +130,23 @@ CONVERSATION:
 ${conversation.map(m => `${m.role === "user" ? "User" : "Coach"}: ${m.content}`).join("\n")}
 
 EXTRACTION RULES:
-- For each goal: make it concrete and measurable even if the user was vague. If they said "get fit" and then said "I want to run a 5K", the goal is "Run a 5K" not "get fit."
+- IDENTITIES are the core unit. Group the user's goals under max 3 identities. Each identity = "I am a [noun phrase]" (max 5 words). Example: "I am a daily mover", "I am a focused builder", "I am someone who shows up."
+- Map each selected area to an identity. Multiple areas can share one identity if they're related.
+- For each identity/goal: make it concrete and measurable even if the user was vague. If they said "get fit" and then said "I want to run a 5K", the goal is "Run a 5K" not "get fit."
 - For struggles: extract the BEHAVIORAL PATTERN, not the surface excuse. "I quit after 2 weeks" → "loses momentum once initial excitement fades." "No time" → "doesn't protect time blocks for habits."
 - For routine: extract actual anchors (morning coffee, commute, lunch break, gym, bedtime) that can be used as habit stack triggers.
-- Identity should capture who they are BECOMING across all their goals, not just one area.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
+  "identities": [
+    {
+      "identity": "I am a [noun phrase]",
+      "areas": ["area id(s) this identity covers"],
+      "goal": "specific measurable goal using their words",
+      "struggle": "the behavioral pattern that stops them",
+      "routine_context": "relevant routine detail for triggers"
+    }
+  ],
   "goals": [
     {
       "area": "area id (health/career/spiritual/relations/growth/fun)",
@@ -139,8 +155,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
       "routine_context": "relevant routine detail for this area's triggers"
     }
   ],
-  "identity": "noun phrase 2-4 words — who they are becoming",
-  "daily_routine": "their day structure: morning/work/evening patterns",
+  "daily_routine": "their day structure: morning/work/evening patterns with specific anchors",
   "key_insight": "the ONE behavioral pattern that if broken would unlock everything else"
 }`;
 }
@@ -151,36 +166,49 @@ function buildUnifiedPlanPrompt(extractedData, dailyLoad, difficulty) {
     medium: "15-30 minutes per action, moderate effort",
     hard: "30-60 minutes per action, serious commitment",
   };
+
+  // Build identity-first profile
+  const identitiesDesc = (extractedData.identities || []).map(id =>
+    `- Identity: "${id.identity}" | Areas: ${id.areas?.join(", ") || "general"} | Goal: ${id.goal} | Struggle: ${id.struggle} | Routine context: ${id.routine_context || "none given"}`
+  ).join("\n");
   const goalsDesc = extractedData.goals.map(g =>
     `- Area: ${g.area} | Goal: ${g.goal} | Struggle: ${g.struggle} | Routine context: ${g.routine_context || "none given"}`
   ).join("\n");
 
-  return `You are an expert habit architect. Build a unified weekly plan weaving multiple goals into one integrated schedule.
+  return `You are 1%, an identity-based habit architect. Build a unified weekly plan that expresses the user's identities through rotating daily actions.
 
 USER PROFILE:
+${identitiesDesc ? `IDENTITIES:\n${identitiesDesc}\n` : ""}GOALS:
 ${goalsDesc}
-- Identity: ${extractedData.identity}
 - Daily routine: ${extractedData.daily_routine}
 - Key insight: ${extractedData.key_insight}
 - Difficulty: ${difficulty} (${diffMap[difficulty]})
-- Actions per day: ${dailyLoad}
+- Actions per day: ${dailyLoad} (max 5 per day, hard limit)
 
-TASK: Generate 3 DISTINCT weekly plans. Each weaves ALL goals across the week.
+CORE PRINCIPLES:
+- Identity-first: Every action is an expression of an identity ("I am a daily mover" → "20 bodyweight squats").
+- Rotation: Different actions across days, same identities and time slots. NOT the same checklist every day.
+- 2-minute fallbacks are MANDATORY: For every action, define a trivially achievable entry behavior that still expresses the identity. "Open the book to your bookmark" not "read for 2 minutes." "Put on running shoes and step outside" not "run for 2 minutes."
+- At least 1 light day per week with fewer/easier actions.
+- No single action should require more than 60 minutes.
 
-PLAN A — "Balanced Rhythm": Goals distributed evenly. Predictable pattern.
-PLAN B — "Energy Matched": High-energy goals on weekday mornings, reflective goals evenings/weekends.
-PLAN C — "Deep Focus": Specific days dedicated to specific areas.
+TASK: Generate 3 DISTINCT weekly plans. Each weaves ALL identities across the week through varied actions.
+
+PLAN A — "Balanced Rhythm": Identities distributed evenly. Predictable pattern. Same time slots each day.
+PLAN B — "Energy Matched": High-energy actions on weekday mornings, reflective actions evenings/weekends.
+PLAN C — "Deep Focus": Specific days dedicated to specific identities for deeper engagement.
 
 RULES:
-1. Each day has exactly ${dailyLoad} action(s). Over 7 days, every goal area appears at least twice.
-2. EVERY action is SPECIFIC and MEASURABLE. BAD: "exercise" GOOD: "20 bodyweight squats"
-3. EVERY action has a "timeSlot" — suggested time of day: "morning" (6-9am), "midday" (11am-1pm), "afternoon" (2-5pm), "evening" (6-9pm). Choose based on the action type and the user's routine.
-4. EVERY action has "suggestedTriggers" — an array of 3 suggested habit-stack triggers the user can choose from. Each trigger must be a real daily routine. Format: "After I [routine]". Make them diverse: one morning, one midday/afternoon, one evening option where possible.
-5. EVERY action has a "twoMin" — the entry behavior (not a shorter version). "Open the book" not "read 2 minutes."
-6. EVERY action has "identity" — "I am a [noun phrase]" max 5 words.
+1. Each day has exactly ${dailyLoad} action(s). Max 5 per day hard limit. Over 7 days, every identity appears at least 2-3 times.
+2. EVERY action starts with a verb and is SPECIFIC and MEASURABLE. BAD: "exercise" GOOD: "20 bodyweight squats". BAD: "read" GOOD: "Read 10 pages of current book."
+3. EVERY action has a "timeSlot" — "morning" (6-9am), "midday" (11am-1pm), "afternoon" (2-5pm), "evening" (6-9pm). Keep consistent time slots per identity across the week.
+4. EVERY action has "suggestedTriggers" — 3 habit-stack triggers. Format: "After I [routine]". Use the user's actual routine anchors. Make them diverse.
+5. EVERY action has "twoMin" — the ENTRY BEHAVIOR (not a shorter version). Must be trivially achievable but still express the identity.
+6. EVERY action has "identity" — "I am a [noun phrase]" max 5 words. Same identity string used consistently.
 7. EVERY action has "area" matching: health, career, spiritual, relations, growth, fun.
 8. Weekends should feel lighter and more enjoyable.
 9. Each plan: name (2-4 words) and philosophy (one sentence referencing the user's key insight).
+10. NEVER output pure goals or outcomes as actions. "Lose 10kg" is NOT an action. "Do 15 minutes of HIIT" IS.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
@@ -198,32 +226,40 @@ Respond ONLY with valid JSON (no markdown, no backticks):
 }
 
 function buildHabitSuggestionPrompt(extractedData, struggles, selectedAreas) {
+  const identitiesDesc = (extractedData.identities || []).map(id =>
+    `- Identity: "${id.identity}" → Goal: ${id.goal} (struggle: ${id.struggle})`
+  ).join("\n");
   const goalsDesc = extractedData.goals.map(g =>
     `- ${g.area}: ${g.goal} (struggle: ${g.struggle})`
   ).join("\n");
   const struggleList = struggles.map(s => STRUGGLES.find(st => st.id === s)?.label || s).join(", ");
 
-  return `Based on this person's goals and struggles, suggest specific habits they could build.
+  return `Based on this person's identities, goals, and struggles, suggest specific habits that EXPRESS their identities through action.
 
-GOALS:
+${identitiesDesc ? `IDENTITIES:\n${identitiesDesc}\n` : ""}GOALS:
 ${goalsDesc}
 
 STRUGGLES: ${struggleList || "none specified"}
 DAILY ROUTINE: ${extractedData.daily_routine || "not specified"}
 
-Generate 8-12 habit suggestions. For each, be SPECIFIC and ACTIONABLE — not categories.
-BAD: "exercise more" GOOD: "20 bodyweight squats"
-BAD: "read" GOOD: "Read 10 pages of a non-fiction book"
-BAD: "save money" GOOD: "Transfer $10 to savings account"
+Generate 8-12 habit suggestions. Each habit must be a concrete expression of one of the user's identities.
+
+RULES:
+- Every action starts with a verb and is SPECIFIC and MEASURABLE.
+  BAD: "exercise more" GOOD: "Do 20 bodyweight squats"
+  BAD: "read" GOOD: "Read 10 pages of current book"
+  BAD: "save money" GOOD: "Transfer $10 to savings account"
+- Every action must be completable in under 60 minutes.
+- Group 2-4 habit suggestions per identity.
 
 Each habit should have:
-- action: the specific habit (measurable, concrete)
+- action: the specific habit (starts with a verb, measurable, concrete)
 - area: which life area (health/career/spiritual/relations/growth/fun)
-- twoMin: the 2-minute ENTRY BEHAVIOR — not a shorter version. "Open the book to your bookmark" not "read for 2 minutes"
-- suggestedTriggers: 3 different trigger options ("After I [routine]")
-- identity: "I am a [noun phrase]" max 5 words
+- twoMin: the 2-minute ENTRY BEHAVIOR — not a shorter version. "Open the book to your bookmark" not "read for 2 minutes." Must be trivially achievable but still express the identity.
+- suggestedTriggers: 3 different trigger options ("After I [routine]") — use the user's actual routine anchors when available
+- identity: "I am a [noun phrase]" max 5 words — MUST match one of the user's identities consistently
 
-Distribute suggestions across ALL their selected areas. Weight toward areas they seem most motivated about.
+Distribute suggestions across ALL their identities and selected areas. Weight toward areas they seem most motivated about.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {"habits": [{"action":"string","area":"string","twoMin":"string","suggestedTriggers":["string","string","string"],"identity":"string"}]}`;
@@ -640,7 +676,17 @@ function AppProvider({ children }) {
       const full = recent.filter(d => d.completed === d.total).length;
       const part = recent.filter(d => d.partial > 0 && d.completed < d.total).length;
       const zero = recent.filter(d => d.completed === 0 && d.partial === 0).length;
-      context = `Last ${recent.length} days: ${full} fully done, ${part} partial, ${zero} missed. Consistency: ${consistencyPct}%.`;
+      context = `WEEKLY REVIEW DATA:
+Last ${recent.length} days: ${full} fully done, ${part} partial, ${zero} missed. Consistency: ${consistencyPct}%.
+
+RE-PLANNING RULES:
+- Reflect briefly and kindly. Highlight where the user expressed each identity, even via fallbacks.
+- Normalize missed actions as information, not failure.
+- If an identity has < 50% completion, suggest an "easy mode" week: more fallbacks, simpler actions, fewer total.
+- If an action is repeatedly skipped, either turn the full action into the new fallback and propose a new easier action, or replace it entirely with a different behavior expressing the same identity.
+- If an action is consistently completed, gently progress it (slightly more time or challenge), but keep changes small and optional.
+- NEVER drop an identity entirely because of a bad week. Shrink it to a single tiny fallback that keeps the identity alive.
+- Treat fallbacks as legitimate progress, not failure.`;
     }
     setScreen("replan");
     generatePlans(context);
