@@ -93,6 +93,7 @@ IDENTITY-FIRST THINKING:
 - Think in terms of "who they want to become," not abstract goals.
 - As you learn about them, mentally map each goal to an identity: "I am a daily mover," "I am a focused learner," "I am someone who shows up for people."
 - Max 3 active identities. If they pick many areas, help them prioritize or group areas under shared identities.
+- Use correct grammar in identity statements. Use "an" before vowel sounds ("an energetic person" not "a energetic person"). Use commas between multiple adjectives ("a calm, focused thinker").
 
 HANDLING VAGUE OR LOW-EFFORT ANSWERS:
 If someone says "all", "everything", "be better", "idk", a single word, or anything that doesn't give you concrete information — DO NOT accept it. Push back warmly:
@@ -106,7 +107,8 @@ NEVER say "Got it. I have what I need" after a vague answer. That produces a gar
 WHAT YOU NEED BEFORE [READY]:
 1. At least one SPECIFIC goal with a concrete outcome (not a category) — and who they want to BE in that area
 2. What their typical day/week looks like (when they work, when they're free, routine anchors like morning coffee, commute, lunch, gym, bedtime)
-3. What has gone wrong before when they tried to improve (the BEHAVIORAL pattern, not the surface excuse)
+3. How much time per day they can realistically commit to new habits (ask directly: "How much time each day could you set aside — even 10 minutes counts?")
+4. What has gone wrong before when they tried to improve (the BEHAVIORAL pattern, not the surface excuse)
 
 HOW TO ASK:
 - One question per message. Under 40 words.
@@ -115,6 +117,11 @@ HOW TO ASK:
 - Never judge any goal.
 - Never give advice during onboarding. Just understand.
 - When they mention a goal, gently probe for the identity behind it: "So you want to be someone who..."
+- Be supportive and non-judgmental at all times. Celebrate what they share, never criticize.
+
+PRIVACY:
+- Never include sensitive personal data (exact weight, income, medical conditions) in identity statements or habit names.
+- Keep identity statements aspirational and general.
 
 ENDING:
 After ${minQ}+ questions, when you have specific concrete information, write a one-sentence summary that frames their goals as identities ("You want to become someone who..."), then [READY] on its own line.`;
@@ -131,10 +138,13 @@ ${conversation.map(m => `${m.role === "user" ? "User" : "Coach"}: ${m.content}`)
 
 EXTRACTION RULES:
 - IDENTITIES are the core unit. Group the user's goals under max 3 identities. Each identity = "I am a [noun phrase]" (max 5 words). Example: "I am a daily mover", "I am a focused builder", "I am someone who shows up."
+- GRAMMAR: Use correct articles ("an" before vowel sounds: "an active person", "an intentional learner"). Use commas between adjectives: "a calm, focused thinker" not "a calm focused thinker."
 - Map each selected area to an identity. Multiple areas can share one identity if they're related.
 - For each identity/goal: make it concrete and measurable even if the user was vague. If they said "get fit" and then said "I want to run a 5K", the goal is "Run a 5K" not "get fit."
 - For struggles: extract the BEHAVIORAL PATTERN, not the surface excuse. "I quit after 2 weeks" → "loses momentum once initial excitement fades." "No time" → "doesn't protect time blocks for habits."
 - For routine: extract actual anchors (morning coffee, commute, lunch break, gym, bedtime) that can be used as habit stack triggers.
+- Extract available_time: how many minutes per day the user said they can commit. If not mentioned, default to 30.
+- PRIVACY: Never include sensitive personal data (exact weight, income, medical details) in identity statements or goals. Keep them aspirational.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
@@ -155,6 +165,7 @@ Respond ONLY with valid JSON (no markdown, no backticks):
       "routine_context": "relevant routine detail for this area's triggers"
     }
   ],
+  "available_time": 30,
   "daily_routine": "their day structure: morning/work/evening patterns with specific anchors",
   "key_insight": "the ONE behavioral pattern that if broken would unlock everything else"
 }`;
@@ -166,6 +177,8 @@ function buildUnifiedPlanPrompt(extractedData, dailyLoad, difficulty) {
     medium: "15-30 minutes per action, moderate effort",
     hard: "30-60 minutes per action, serious commitment",
   };
+  const availTime = extractedData.available_time || 30;
+  const maxPerDay = Math.min(dailyLoad, availTime <= 20 ? 2 : availTime <= 40 ? 3 : 5);
 
   // Build identity-first profile
   const identitiesDesc = (extractedData.identities || []).map(id =>
@@ -182,15 +195,23 @@ ${identitiesDesc ? `IDENTITIES:\n${identitiesDesc}\n` : ""}GOALS:
 ${goalsDesc}
 - Daily routine: ${extractedData.daily_routine}
 - Key insight: ${extractedData.key_insight}
+- Available time: ${availTime} minutes per day
 - Difficulty: ${difficulty} (${diffMap[difficulty]})
-- Actions per day: ${dailyLoad} (max 5 per day, hard limit)
+- Actions per day: ${maxPerDay} (scaled to user's available time)
 
 CORE PRINCIPLES:
 - Identity-first: Every action is an expression of an identity ("I am a daily mover" → "20 bodyweight squats").
-- Rotation: Different actions across days, same identities and time slots. NOT the same checklist every day.
-- 2-minute fallbacks are MANDATORY: For every action, define a trivially achievable entry behavior that still expresses the identity. "Open the book to your bookmark" not "read for 2 minutes." "Put on running shoes and step outside" not "run for 2 minutes."
-- At least 1 light day per week with fewer/easier actions.
+- Rotation & variety: Different actions across days, same identities and time slots. NOT the same checklist every day. Avoid repeating the exact same action on multiple days unless the user explicitly requested it. Vary the specific behavior while keeping it tied to the same identity.
+- 2-minute fallbacks are MANDATORY: For every action, define a trivially achievable entry behavior that truly takes under 2 minutes. "Open the book to your bookmark" not "read for 2 minutes." "Lay out running clothes" not "go for a short run."
+- At least 1 REST DAY per week with zero or only 1 light/optional task.
 - No single action should require more than 60 minutes.
+- Do NOT schedule intense physical habits on consecutive days. Balance physical and non-physical tasks.
+
+TIME-AWARE SCHEDULING:
+- The user has ~${availTime} minutes per day. Scale accordingly.
+- Each time slot (morning/midday/afternoon/evening) gets at most ONE task per day.
+- No more than 2 primary habits on the same day.
+${availTime <= 20 ? "- User has very limited time. Keep plans minimal: 1-2 small habits per day. Focus on consistency over volume." : availTime <= 40 ? "- Moderate time budget. 2-3 habits per day, mostly small and medium difficulty." : "- Good time budget. Can include ambitious habits alongside smaller ones."}
 
 TASK: Generate 3 DISTINCT weekly plans. Each weaves ALL identities across the week through varied actions.
 
@@ -199,16 +220,17 @@ PLAN B — "Energy Matched": High-energy actions on weekday mornings, reflective
 PLAN C — "Deep Focus": Specific days dedicated to specific identities for deeper engagement.
 
 RULES:
-1. Each day has exactly ${dailyLoad} action(s). Max 5 per day hard limit. Over 7 days, every identity appears at least 2-3 times.
-2. EVERY action starts with a verb and is SPECIFIC and MEASURABLE. BAD: "exercise" GOOD: "20 bodyweight squats". BAD: "read" GOOD: "Read 10 pages of current book."
-3. EVERY action has a "timeSlot" — "morning" (6-9am), "midday" (11am-1pm), "afternoon" (2-5pm), "evening" (6-9pm). Keep consistent time slots per identity across the week.
+1. Each day has at most ${maxPerDay} action(s). Over 7 days, every identity appears at least 2-3 times.
+2. EVERY action starts with a verb and is SPECIFIC and MEASURABLE. BAD: "exercise" GOOD: "Do 20 bodyweight squats". BAD: "read" GOOD: "Read 10 pages of current book."
+3. EVERY action has a "timeSlot" — "morning" (6-9am), "midday" (11am-1pm), "afternoon" (2-5pm), "evening" (6-9pm). Only ONE action per time slot per day.
 4. EVERY action has "suggestedTriggers" — 3 habit-stack triggers. Format: "After I [routine]". Use the user's actual routine anchors. Make them diverse.
-5. EVERY action has "twoMin" — the ENTRY BEHAVIOR (not a shorter version). Must be trivially achievable but still express the identity.
-6. EVERY action has "identity" — "I am a [noun phrase]" max 5 words. Same identity string used consistently.
+5. EVERY action has "twoMin" — the ENTRY BEHAVIOR (not a shorter version). Must be trivially achievable in under 2 minutes.
+6. EVERY action has "identity" — "I am a [noun phrase]" max 5 words. Same identity string used consistently. Correct grammar: "an" before vowels, commas between adjectives.
 7. EVERY action has "area" matching: health, career, spiritual, relations, growth, fun.
-8. Weekends should feel lighter and more enjoyable.
+8. Weekends should feel lighter. At least one day with 0-1 tasks.
 9. Each plan: name (2-4 words) and philosophy (one sentence referencing the user's key insight).
 10. NEVER output pure goals or outcomes as actions. "Lose 10kg" is NOT an action. "Do 15 minutes of HIIT" IS.
+11. NEVER include sensitive personal data (exact weight, income, medical details) in actions or identities.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
 {
@@ -233,6 +255,7 @@ function buildHabitSuggestionPrompt(extractedData, struggles, selectedAreas) {
     `- ${g.area}: ${g.goal} (struggle: ${g.struggle})`
   ).join("\n");
   const struggleList = struggles.map(s => STRUGGLES.find(st => st.id === s)?.label || s).join(", ");
+  const availTime = extractedData.available_time || 30;
 
   return `Based on this person's identities, goals, and struggles, suggest specific habits that EXPRESS their identities through action.
 
@@ -241,32 +264,43 @@ ${goalsDesc}
 
 STRUGGLES: ${struggleList || "none specified"}
 DAILY ROUTINE: ${extractedData.daily_routine || "not specified"}
+AVAILABLE TIME: ${availTime} minutes per day
 
-Generate 8-12 habit suggestions. Each habit must be a concrete expression of one of the user's identities.
+DIVERSITY & VARIETY:
+- Generate at least 5 suggestions per selected area (${selectedAreas.length} areas = at least ${selectedAreas.length * 5} total suggestions).
+- For each area, include a MIX of difficulty levels:
+  • Small (5-10 min, easy to start)
+  • Medium (15-30 min, moderate effort)
+  • Ambitious (30-60 min, for motivated days)
+- VARY the actions. Do NOT suggest the same action twice. Each suggestion should be a genuinely different behavior.
+- Do NOT suggest intense physical habits on consecutive days in the weekly plan.
 
-RULES:
-- Every action starts with a verb and is SPECIFIC and MEASURABLE.
-  BAD: "exercise more" GOOD: "Do 20 bodyweight squats"
-  BAD: "read" GOOD: "Read 10 pages of current book"
-  BAD: "save money" GOOD: "Transfer $10 to savings account"
-- Every action must be completable in under 60 minutes.
-- Group 2-4 habit suggestions per identity.
+TIME-AWARE LIMITS:
+- The user has ~${availTime} minutes per day. ${availTime <= 20 ? "Cap at 2-3 habits per day maximum. Focus on small and medium difficulty." : availTime <= 40 ? "Cap at 3-4 habits per day. Mix of small and medium, with occasional ambitious." : "Up to 5 habits per day is fine. Include ambitious options."}
 
 Each habit should have:
 - action: the specific habit (starts with a verb, measurable, concrete)
+  BAD: "exercise more" GOOD: "Do 20 bodyweight squats"
+  BAD: "read" GOOD: "Read 10 pages of current book"
+  BAD: "save money" GOOD: "Transfer $10 to savings account"
 - area: which life area (health/career/spiritual/relations/growth/fun)
-- twoMin: the 2-minute ENTRY BEHAVIOR — not a shorter version. "Open the book to your bookmark" not "read for 2 minutes." Must be trivially achievable but still express the identity.
+- twoMin: the 2-minute ENTRY BEHAVIOR — must be trivially achievable and truly doable in under 2 minutes. "Open the book to your bookmark" not "read for 2 minutes." "Lay out your running clothes" not "go for a short run."
 - suggestedTriggers: 3 different trigger options ("After I [routine]") — use the user's actual routine anchors when available
 - identity: "I am a [noun phrase]" max 5 words — MUST match one of the user's identities consistently
+- difficulty: "small" | "medium" | "ambitious"
+
+GRAMMAR: Use correct articles in identity statements ("an" before vowel sounds). Use commas between adjectives.
+PRIVACY: Never include sensitive personal data (weight, income, medical details) in actions or identities.
 
 Distribute suggestions across ALL their identities and selected areas. Weight toward areas they seem most motivated about.
 
 Respond ONLY with valid JSON (no markdown, no backticks):
-{"habits": [{"action":"string","area":"string","twoMin":"string","suggestedTriggers":["string","string","string"],"identity":"string"}]}`;
+{"habits": [{"action":"string","area":"string","twoMin":"string","suggestedTriggers":["string","string","string"],"identity":"string","difficulty":"small|medium|ambitious"}]}`;
 }
 
-function buildSchedulePrompt(habits, routine) {
-  const habitList = habits.map((h, i) => `${i}: "${h.action}" (${h.area})`).join("\n");
+function buildSchedulePrompt(habits, routine, availTime) {
+  const habitList = habits.map((h, i) => `${i}: "${h.action}" (${h.area}, ${h.difficulty || "medium"})`).join("\n");
+  const maxPerDay = (availTime || 30) <= 20 ? 2 : (availTime || 30) <= 40 ? 3 : 4;
 
   return `Distribute these habits across a 7-day week. The user will be able to rearrange after.
 
@@ -274,11 +308,16 @@ HABITS:
 ${habitList}
 
 USER ROUTINE: ${routine || "standard 9-5 schedule"}
+AVAILABLE TIME: ${availTime || 30} minutes per day
 
 RULES:
-- Spread habits across the week so each day has 1-3 actions
-- Don't put all similar habits on the same day
-- Weekends should feel lighter
+- Max ${maxPerDay} actions per day (based on user's available time).
+- No more than 2 PRIMARY habits on the same day.
+- Each time slot (morning/midday/afternoon/evening) gets at most ONE task per day.
+- At least 1 REST DAY per week (Saturday or Sunday) with zero or only 1 light task.
+- Don't put all similar habits on the same day.
+- Do NOT schedule intense physical habits on consecutive days. Alternate physical and non-physical tasks.
+- Weekends should feel lighter and more enjoyable.
 - For each placement, assign a timeSlot: morning, midday, afternoon, or evening
 - Use the habit's index number to reference it
 
@@ -443,8 +482,7 @@ function AppProvider({ children }) {
       setChatMessages(prev => [...prev, { role: "assistant", content: cleanReply }]);
       if (isReady) setCoachReady(true);
     } catch (e) {
-      setChatMessages(prev => [...prev, { role: "assistant", content: "Got it. I think I have what I need to build your plan." }]);
-      setCoachReady(true);
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, I had a moment — could you try sending that again? I want to make sure I get this right for you." }]);
     } finally { setChatLoading(false); }
   }
 
@@ -495,11 +533,22 @@ function AppProvider({ children }) {
       const habits = (parsed.habits || []).map((h, i) => ({ ...h, id: `s${i}`, selected: false }));
       setSuggestedHabits(habits);
     } catch (e) {
-      setSuggestedHabits([
-        { id:"s0", action:"20 bodyweight squats", area:"health", twoMin:"Get into squat position", suggestedTriggers:["After I wake up","After I pour coffee","After I get home"], identity:"I am a daily mover", selected: false },
-        { id:"s1", action:"Read 10 pages", area:"growth", twoMin:"Open book to bookmark", suggestedTriggers:["After dinner","After I brush my teeth","After lunch"], identity:"I am a reader", selected: false },
-        { id:"s2", action:"Write 3 gratitude items", area:"spiritual", twoMin:"Open journal to blank page", suggestedTriggers:["After morning coffee","After dinner","After I brush my teeth"], identity:"I am grateful", selected: false },
-      ]);
+      // Diverse fallback suggestions with difficulty levels
+      const fallbackHabits = [
+        { id:"s0", action:"Do 20 bodyweight squats", area:"health", twoMin:"Get into squat position and do one", suggestedTriggers:["After I wake up","After I pour coffee","After I get home"], identity:"I am a daily mover", difficulty:"small", selected: false },
+        { id:"s1", action:"Go for a 20-minute walk outside", area:"health", twoMin:"Put on shoes and step outside", suggestedTriggers:["After lunch","After I finish work","After morning coffee"], identity:"I am a daily mover", difficulty:"medium", selected: false },
+        { id:"s2", action:"Read 10 pages of current book", area:"growth", twoMin:"Open book to your bookmark", suggestedTriggers:["After dinner","After I settle into bed","After lunch"], identity:"I am an intentional learner", difficulty:"small", selected: false },
+        { id:"s3", action:"Watch one tutorial on a new skill", area:"growth", twoMin:"Open the tutorial app and pick a video", suggestedTriggers:["After dinner","After I finish work","After lunch"], identity:"I am an intentional learner", difficulty:"medium", selected: false },
+        { id:"s4", action:"Write 3 things I'm grateful for", area:"spiritual", twoMin:"Open journal to a blank page", suggestedTriggers:["After morning coffee","After dinner","After I settle into bed"], identity:"I am a reflective person", difficulty:"small", selected: false },
+        { id:"s5", action:"10 minutes of focused breathing", area:"spiritual", twoMin:"Sit down and take 3 deep breaths", suggestedTriggers:["After I wake up","After lunch","Before bed"], identity:"I am a reflective person", difficulty:"small", selected: false },
+        { id:"s6", action:"Send a thoughtful message to a friend", area:"relations", twoMin:"Open messages and pick one person", suggestedTriggers:["After morning coffee","After lunch","After dinner"], identity:"I am someone who shows up", difficulty:"small", selected: false },
+        { id:"s7", action:"Prepare a healthy meal from scratch", area:"health", twoMin:"Lay out the ingredients on the counter", suggestedTriggers:["After I get home from work","After I finish exercising","After my morning routine"], identity:"I am a daily mover", difficulty:"ambitious", selected: false },
+      ];
+      // Filter to selected areas + always include a few cross-area suggestions
+      const areaSet = new Set(selectedAreas);
+      const relevant = fallbackHabits.filter(h => areaSet.has(h.area));
+      const extras = fallbackHabits.filter(h => !areaSet.has(h.area)).slice(0, 2);
+      setSuggestedHabits(relevant.length > 0 ? [...relevant, ...extras] : fallbackHabits);
     } finally { setLoadingHabits(false); }
   }
 
@@ -540,7 +589,7 @@ function AppProvider({ children }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 1500,
-          messages: [{ role: "user", content: buildSchedulePrompt(selected, extractedData?.daily_routine) }]
+          messages: [{ role: "user", content: buildSchedulePrompt(selected, extractedData?.daily_routine, extractedData?.available_time) }]
         })
       });
       const data = await res.json();
@@ -676,17 +725,34 @@ function AppProvider({ children }) {
       const full = recent.filter(d => d.completed === d.total).length;
       const part = recent.filter(d => d.partial > 0 && d.completed < d.total).length;
       const zero = recent.filter(d => d.completed === 0 && d.partial === 0).length;
+      const totalPossible = recent.reduce((s, d) => s + d.total, 0);
+      const totalDone = recent.reduce((s, d) => s + d.completed, 0);
+      const totalPartial = recent.reduce((s, d) => s + d.partial, 0);
+      const overallRate = totalPossible > 0 ? Math.round(((totalDone + totalPartial * 0.5) / totalPossible) * 100) : 0;
+
+      // Include check-in mood data if available
+      const moodNote = checkinChoice ? `User's latest mood: "${CHECKIN_RESPONSES[checkinChoice] || checkinChoice}".` : "";
+      const userNote = checkinNote ? `User shared: "${checkinNote}"` : "";
+
       context = `WEEKLY REVIEW DATA:
-Last ${recent.length} days: ${full} fully done, ${part} partial, ${zero} missed. Consistency: ${consistencyPct}%.
+Last ${recent.length} days: ${full} fully done, ${part} partial, ${zero} missed. Overall completion: ${overallRate}%. Consistency: ${consistencyPct}%.
+${moodNote}
+${userNote}
 
 RE-PLANNING RULES:
-- Reflect briefly and kindly. Highlight where the user expressed each identity, even via fallbacks.
-- Normalize missed actions as information, not failure.
-- If an identity has < 50% completion, suggest an "easy mode" week: more fallbacks, simpler actions, fewer total.
-- If an action is repeatedly skipped, either turn the full action into the new fallback and propose a new easier action, or replace it entirely with a different behavior expressing the same identity.
-- If an action is consistently completed, gently progress it (slightly more time or challenge), but keep changes small and optional.
+- Reflect briefly and kindly. Celebrate what went well — even partial completions and fallbacks count as wins.
+- Normalize missed actions as information, not failure. Never criticize or shame.
+- ADAPT based on completion rates:
+  • If overall < 40%: REDUCE load significantly. Fewer habits per day. More fallback-friendly actions. Shorter durations. The user is overwhelmed.
+  • If overall 40-70%: Slight adjustments. Swap out consistently skipped actions for easier alternatives. Keep what's working.
+  • If overall > 70%: Gently progress. Slightly increase challenge on completed habits. Add one new small habit if appropriate.
+- If an action was repeatedly skipped: either turn the full action into the new fallback and propose a new easier action, or replace it entirely with a different behavior expressing the same identity.
+- If an action was consistently completed: gently progress it (slightly more time or challenge), but keep changes small and optional.
 - NEVER drop an identity entirely because of a bad week. Shrink it to a single tiny fallback that keeps the identity alive.
-- Treat fallbacks as legitimate progress, not failure.`;
+- Treat fallbacks as legitimate progress, not failure.
+- Maintain at least 1 rest day per week.
+- Keep time slot discipline: max 1 action per time slot per day.
+- Use correct grammar in all identity statements.`;
     }
     setScreen("replan");
     generatePlans(context);
