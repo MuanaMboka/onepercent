@@ -339,10 +339,11 @@ function AppProvider({ children }) {
   const saved = useRef(loadSaved()).current;
 
   // Determine initial screen: completed onboarding → "today", mid-onboarding → "onboarding", fresh → "usp"
-  const initScreen = saved?.weekPlan ? "today" : saved?.obPhase ? "onboarding" : "usp";
+  // Only push to onboarding if the user actually started it (has selectedAreas). Otherwise stay on USP.
+  const initScreen = saved?.weekPlan ? "today" : (saved?.obPhase && saved?.selectedAreas?.length > 0) ? "onboarding" : "usp";
 
   const [firstTime, setFirstTime] = useState(saved ? false : true);
-  const [uspSlide, setUspSlide] = useState(0);
+  const [uspSlide, setUspSlide] = useState(saved?.uspSlide || 0);
 
   // ONBOARDING PHASES: "areas" → "chat" → "struggles" → "habits" → "calendar" → "ready"
   const [obPhase, setObPhase] = useState(saved?.obPhase || "areas");
@@ -410,13 +411,13 @@ function AppProvider({ children }) {
   // ── Persist state to localStorage (saves at every stage, including mid-onboarding) ──
   useEffect(() => {
     saveState({
-      obPhase, selectedAreas, chatMessages, coachReady, extractedData,
+      uspSlide, obPhase, selectedAreas, chatMessages, coachReady, extractedData,
       struggles, suggestedHabits, userHabits,
       dailyLoad, difficulty, weekSchedule, selectedPlanIdx, weekPlan,
       dayNumber, weekDay, checked, partialChecked,
       completionHistory, checkinDone, checkinChoice, checkinNote,
     });
-  }, [obPhase, selectedAreas, chatMessages, coachReady, extractedData,
+  }, [uspSlide, obPhase, selectedAreas, chatMessages, coachReady, extractedData,
       struggles, suggestedHabits, userHabits, dailyLoad, difficulty,
       weekSchedule, selectedPlanIdx, weekPlan, dayNumber, weekDay, checked,
       partialChecked, completionHistory, checkinDone, checkinChoice, checkinNote]);
@@ -502,8 +503,15 @@ function AppProvider({ children }) {
       setObPhase("struggles");
     } catch (e) {
       setExtractedData({
+        identities: selectedAreas.slice(0, 3).map(a => ({
+          identity: `I am a ${LIFE_AREAS.find(la => la.id === a)?.label?.split(" ")[0]?.toLowerCase() || "growing"} person`,
+          areas: [a],
+          goal: "Improve in this area",
+          struggle: "consistency",
+          routine_context: ""
+        })),
         goals: selectedAreas.map(a => ({ area: a, goal: "Improve in this area", struggle: "consistency", routine_context: "" })),
-        identity: "a consistent grower",
+        available_time: 30,
         daily_routine: "standard morning-to-evening",
         key_insight: "Starting is the hardest part"
       });
@@ -544,11 +552,10 @@ function AppProvider({ children }) {
         { id:"s6", action:"Send a thoughtful message to a friend", area:"relations", twoMin:"Open messages and pick one person", suggestedTriggers:["After morning coffee","After lunch","After dinner"], identity:"I am someone who shows up", difficulty:"small", selected: false },
         { id:"s7", action:"Prepare a healthy meal from scratch", area:"health", twoMin:"Lay out the ingredients on the counter", suggestedTriggers:["After I get home from work","After I finish exercising","After my morning routine"], identity:"I am a daily mover", difficulty:"ambitious", selected: false },
       ];
-      // Filter to selected areas + always include a few cross-area suggestions
+      // Only show habits from user's selected areas — don't include unrelated areas
       const areaSet = new Set(selectedAreas);
       const relevant = fallbackHabits.filter(h => areaSet.has(h.area));
-      const extras = fallbackHabits.filter(h => !areaSet.has(h.area)).slice(0, 2);
-      setSuggestedHabits(relevant.length > 0 ? [...relevant, ...extras] : fallbackHabits);
+      setSuggestedHabits(relevant.length > 0 ? relevant : fallbackHabits.slice(0, 4));
     } finally { setLoadingHabits(false); }
   }
 
@@ -558,14 +565,20 @@ function AppProvider({ children }) {
 
   function addCustomHabit() {
     if (!newHabitText.trim() || !newHabitArea) return;
+    const actionText = newHabitText.trim();
+    // Auto-generate 2-min fallback and triggers so custom habits aren't second-class
+    const areaLabel = LIFE_AREAS.find(a => a.id === newHabitArea)?.label || newHabitArea;
+    const routine = extractedData?.daily_routine || "";
+    const anchors = routine.match(/morning coffee|commute|lunch|breakfast|dinner|bedtime|wake up|get home/gi) || ["morning coffee", "lunch", "dinner"];
     const habit = {
       id: `c${Date.now()}`,
-      action: newHabitText.trim(),
+      action: actionText,
       area: newHabitArea,
-      twoMin: "",
-      suggestedTriggers: [],
+      twoMin: `Spend 2 minutes starting: ${actionText.toLowerCase()}`,
+      suggestedTriggers: anchors.slice(0, 3).map(a => `After ${a.toLowerCase()}`),
       selectedTrigger: null,
-      identity: "",
+      identity: extractedData?.identities?.find(id => id.areas?.includes(newHabitArea))?.identity || "",
+      difficulty: "medium",
       selected: true,
     };
     setSuggestedHabits(prev => [...prev, habit]);
@@ -902,8 +915,8 @@ function USPCarousel() {
 
       <div className="usp-top-bar">
         <span className={`usp-logo ${light ? "usp-logo-dark" : ""}`}>1%</span>
-        <button className={`usp-skip ${light ? "usp-skip-dark" : ""}`}
-          onClick={() => setScreen("onboarding")}>{isLast ? "" : "Skip"}</button>
+        {!isLast && <button className={`usp-skip ${light ? "usp-skip-dark" : ""}`}
+          onClick={() => setScreen("onboarding")}>Skip</button>}
       </div>
 
       <div className="usp-main fade-in">
@@ -954,7 +967,7 @@ function OB_Areas() {
     <div className="ob-screen fade-in">
       <ObProgress step={1} total={6} />
       <h2 className="ob-h">What matters to you?</h2>
-      <p className="ob-p">Pick as many as you want.</p>
+      <p className="ob-p">Pick up to 3 for best results. More areas won't mean more daily tasks.</p>
 
       <div className="area-grid">
         {LIFE_AREAS.map(a => {
@@ -986,10 +999,12 @@ function OB_Areas() {
 
 // ── Conversational Chat ───────────────────────────────────────────────────────
 function OB_Chat() {
-  const { chatMessages, chatInput, setChatInput, chatLoading, sendChat, coachReady, finishChat, extracting } = useApp();
+  const { chatMessages, chatInput, setChatInput, chatLoading, sendChat, coachReady, finishChat, extracting, selectedAreas } = useApp();
   const bottomRef = useRef(null);
   const userMsgCount = chatMessages.filter(m => m.role === "user").length;
-  const canSkip = userMsgCount >= 3 && !coachReady;
+  const minQuestions = Math.max(3, selectedAreas.length);
+  // Only allow skip after user has answered at least the minimum number of questions the coach needs
+  const canSkip = userMsgCount >= minQuestions && !coachReady;
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages, chatLoading]);
 
