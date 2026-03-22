@@ -1246,7 +1246,7 @@ function OB_Ready() {
           </span>
         ))}
       </div>
-      {extractedData?.identity && <p className="id-line" style={{ textAlign: "center", marginBottom: 12 }}>🪞 Becoming: <strong>a {extractedData.identity}</strong></p>}
+      {extractedData?.identity && <p className="id-line" style={{ textAlign: "center", marginBottom: 12 }}>🪞 Becoming: <strong>{extractedData.identity}</strong></p>}
       <div className="ready-plan-name">
         <p className="rpn">{weekPlan?.name}</p>
         <p className="rpp">{weekPlan?.philosophy}</p>
@@ -1559,7 +1559,7 @@ function ProgressScreen() {
       <h2 className="ob-h" style={{ fontSize: 26, marginBottom: 14 }}>Progress</h2>
 
       {extractedData?.identity && (
-        <div className="id-card stagger-1"><span>🪞</span><div><p className="id-lbl">Identity</p><p className="id-txt">Becoming: <strong>a {extractedData.identity}</strong></p></div></div>
+        <div className="id-card stagger-1"><span>🪞</span><div><p className="id-lbl">Identity</p><p className="id-txt">Becoming: <strong>{extractedData.identity}</strong></p></div></div>
       )}
 
       <div className="cons-card stagger-2">
