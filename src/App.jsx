@@ -1586,13 +1586,14 @@ function generateFallbackPlans(load, areas) {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Satoshi:wght@400;500;600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{margin:0;padding:0;width:100%;height:100%;background:#FAFAF8;}#root{width:100%;min-height:100%;}
 :root{
   --bg:#FAFAF8;--ink:#151515;--muted:#999;--border:#ECEAE6;
   --warm:#F3F2EF;--accent:#C2632A;--green:#1A6B44;--green-bg:#EDF8F2;
   --font-display:'Instrument Serif',serif;
   --font-body:'Satoshi',sans-serif;
 }
-.app-root{width:100%;max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;font-family:var(--font-body);position:relative;}
+.app-root{width:100%;max-width:100%;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;font-family:var(--font-body);position:relative;}
 .screen-area{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:env(safe-area-inset-top);}.screen-area::-webkit-scrollbar{display:none;}
 .screen{min-height:100%;display:flex;flex-direction:column;}.pad{padding:20px 22px;}
 
