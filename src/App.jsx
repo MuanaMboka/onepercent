@@ -19,27 +19,27 @@ const LIFE_AREAS = [
 const USP_SLIDES = [
   {
     num:"01",
-    headline:"Your plan changes daily.",
-    sub:"Because you do.",
-    body:"Static checklists get boring by day 3. Your plan rotates — different actions each day, same goals underneath.",
+    headline:"Not the same list every day.",
+    sub:"Your plan rotates weekly.",
+    body:"Different actions. Same goals. Always moving.",
     accent:"#C2632A",
     bg:"linear-gradient(145deg,#1A1008 0%,#2C1810 50%,#1A1008 100%)",
     light:false,
   },
   {
     num:"02",
-    headline:"Every part of your life.",
-    sub:"One unified system.",
-    body:"Health. Career. Relationships. Spirituality. Pick what matters. The AI weaves it into one simple daily plan.",
+    headline:"One app. Your whole life.",
+    sub:"Health. Money. Love. Growth.",
+    body:"Pick what matters. AI builds one daily plan across all of it.",
     accent:"#2D9A6F",
     bg:"linear-gradient(145deg,#FAFAF8 0%,#EDF8F2 50%,#FAFAF8 100%)",
     light:true,
   },
   {
     num:"03",
-    headline:"Miss a day? Welcome back.",
-    sub:"No streaks. No shame.",
-    body:"Did half? That counts. Skipped three days? The app adapts. The only failure is never opening it again.",
+    headline:"You came back.",
+    sub:"That's all that matters.",
+    body:"Half counts. Rest counts. The only loss is never opening it again.",
     accent:"#7C5CBF",
     bg:"linear-gradient(145deg,#0F0A18 0%,#1A1028 50%,#0F0A18 100%)",
     light:false,
@@ -63,19 +63,19 @@ const CHECKIN_OPTIONS = [
 ];
 
 const CHECKIN_RESPONSES = {
-  easy:    "That is the system working. The easier it feels, the more automatic it is becoming.",
-  hard:    "Hard days are where habits get forged. Showing up when it is difficult is the real vote.",
-  partial: "Partial counts. A shorter version is infinitely better than zero.",
-  rest:    "Rest is part of the system, not a failure of it.",
+  easy:    "Easy means the system is working.",
+  hard:    "Hard days forge the habit. You showed up.",
+  partial: "Something beats nothing. Always.",
+  rest:    "Rest is part of the system.",
 };
 
 const MILESTONES = [
-  { day:3,  icon:"🌱", title:"First steps", msg:"3 days in. Most people never start. You did." },
-  { day:7,  icon:"🔥", title:"One week",    msg:"A full week. Your brain is starting to notice the pattern." },
-  { day:14, icon:"⚡", title:"Two weeks",   msg:"14 days. The neural pathway is forming. This is real." },
-  { day:21, icon:"🏔️", title:"Three weeks", msg:"21 days. The old myth said this is enough. Science says keep going — you're building something lasting." },
-  { day:30, icon:"💎", title:"One month",   msg:"30 days. Most people who quit an app do it before now. You didn't." },
-  { day:66, icon:"👑", title:"Automatic",   msg:"66 days. This is the research-backed average for a habit to become automatic. You're there." },
+  { day:3,  icon:"🌱", title:"Started",    msg:"Most people never do. You did." },
+  { day:7,  icon:"🔥", title:"One week",   msg:"Your brain is noticing the pattern." },
+  { day:14, icon:"⚡", title:"Two weeks",  msg:"The neural pathway is forming." },
+  { day:21, icon:"🏔️", title:"21 days",    msg:"The myth says this is enough. Science says keep going." },
+  { day:30, icon:"💎", title:"One month",  msg:"Most people quit before now. You didn't." },
+  { day:66, icon:"👑", title:"Automatic",  msg:"66 days. Research says this is when it sticks." },
 ];
 
 // ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
@@ -662,26 +662,19 @@ export default function App() {
 function Shell() {
   const { screen } = useApp();
   return (
-    <div className="universe">
-      <div className="phone">
-        <StatusBar />
-        <div className="screen-area">
-          {screen === "usp" && <USPCarousel />}
-          {screen === "onboarding" && <Onboarding />}
-          {screen === "today" && <TodayScreen />}
-          {screen === "nudges" && <NudgesScreen />}
-          {screen === "reflection" && <ReflectionScreen />}
-          {screen === "progress" && <ProgressScreen />}
-          {screen === "replan" && <ReplanScreen />}
-        </div>
-        {!["usp","onboarding","replan"].includes(screen) && <BottomNav />}
+    <div className="app-root">
+      <div className="screen-area">
+        {screen === "usp" && <USPCarousel />}
+        {screen === "onboarding" && <Onboarding />}
+        {screen === "today" && <TodayScreen />}
+        {screen === "nudges" && <NudgesScreen />}
+        {screen === "reflection" && <ReflectionScreen />}
+        {screen === "progress" && <ProgressScreen />}
+        {screen === "replan" && <ReplanScreen />}
       </div>
+      {!["usp","onboarding","replan"].includes(screen) && <BottomNav />}
     </div>
   );
-}
-
-function StatusBar() {
-  return <div className="sb"><span className="sb-t">9:41</span><div className="sb-notch" /><span className="sb-r">●●● 91%</span></div>;
 }
 
 // ─── USP CAROUSEL ─────────────────────────────────────────────────────────────
@@ -749,9 +742,8 @@ function OB_Areas() {
   return (
     <div className="ob-screen fade-in">
       <ObProgress step={1} total={6} />
-      <p className="ob-eye">Step 1 · Your life</p>
-      <h2 className="ob-h">What areas of<br />your life matter?</h2>
-      <p className="ob-p">Pick as many as you want. Your AI coach will help you set goals for each.</p>
+      <h2 className="ob-h">What matters to you?</h2>
+      <p className="ob-p">Pick as many as you want.</p>
 
       <div className="area-grid">
         {LIFE_AREAS.map(a => {
@@ -868,9 +860,8 @@ function OB_Struggles() {
   return (
     <div className="ob-screen fade-in">
       <ObProgress step={3} total={6} />
-      <p className="ob-eye">Step 3 · Your challenges</p>
-      <h2 className="ob-h">What usually<br />gets in the way?</h2>
-      <p className="ob-p">Pick any that feel familiar. This shapes how your plan is built.</p>
+      <h2 className="ob-h">What gets in the way?</h2>
+      <p className="ob-p">Tap what feels familiar.</p>
 
       {extractedData?.key_insight && (
         <div className="insight-card stagger-1">
@@ -899,7 +890,7 @@ function OB_Struggles() {
       </div>
 
       <button className="btn-primary mt16" onClick={generateHabitSuggestions}>
-        {struggles.length > 0 ? "Next: Choose your habits" : "Skip — choose habits"}
+        {struggles.length > 0 ? "Next" : "Skip"}
       </button>
     </div>
   );
@@ -922,11 +913,11 @@ function OB_Habits() {
           <div className="gen-ring-2" />
           <div className="gen-ring-3" />
         </div>
-        <h3 className="gen-title" style={{ color: "#FAFAF8" }}>Suggesting habits</h3>
+        <h3 className="gen-title" style={{ color: "#FAFAF8" }}>Finding your habits</h3>
         <div className="gen-steps">
-          <p className="gen-step gs-1">Analyzing your goals</p>
-          <p className="gen-step gs-2">Matching habits to your struggles</p>
-          <p className="gen-step gs-3">Finding specific daily actions</p>
+          <p className="gen-step gs-1">Reading your goals</p>
+          <p className="gen-step gs-2">Finding what fits</p>
+          <p className="gen-step gs-3">Building your options</p>
         </div>
       </div>
     </div>
@@ -935,9 +926,8 @@ function OB_Habits() {
   return (
     <div className="ob-screen fade-in">
       <ObProgress step={4} total={6} />
-      <p className="ob-eye">Step 4 · Your habits</p>
-      <h2 className="ob-h">Pick your habits.</h2>
-      <p className="ob-p">The AI suggested these based on your goals. Tap to select, swipe to remove, or add your own below.</p>
+      <h2 className="ob-h">Your habits.</h2>
+      <p className="ob-p">Select, remove, or add your own.</p>
 
       <div className="habit-list">
         {suggestedHabits.map(h => {
@@ -984,7 +974,7 @@ function OB_Habits() {
         <p className="hf-count">{selectedCount} habit{selectedCount !== 1 ? "s" : ""} selected</p>
         <button className={`btn-primary${selectedCount === 0 ? " btn-off" : ""}`}
           onClick={buildSchedule} disabled={selectedCount === 0}>
-          Next: Plan your week
+          Next
         </button>
       </div>
     </div>
@@ -1008,11 +998,11 @@ function OB_Calendar() {
           <div className="gen-ring-2" />
           <div className="gen-ring-3" />
         </div>
-        <h3 className="gen-title" style={{ color: "#FAFAF8" }}>Building your week</h3>
+        <h3 className="gen-title" style={{ color: "#FAFAF8" }}>Laying out the week</h3>
         <div className="gen-steps">
-          <p className="gen-step gs-1">Distributing habits across days</p>
-          <p className="gen-step gs-2">Matching energy to time slots</p>
-          <p className="gen-step gs-3">Balancing your areas</p>
+          <p className="gen-step gs-1">Spreading habits across days</p>
+          <p className="gen-step gs-2">Matching time of day</p>
+          <p className="gen-step gs-3">Balancing the week</p>
         </div>
       </div>
     </div>
@@ -1023,9 +1013,8 @@ function OB_Calendar() {
   return (
     <div className="ob-screen fade-in">
       <ObProgress step={5} total={6} />
-      <p className="ob-eye">Step 5 · Your week</p>
-      <h2 className="ob-h">Your weekly plan.</h2>
-      <p className="ob-p">The AI distributed your habits. Tap × to remove, tap + to add, or rearrange.</p>
+      <h2 className="ob-h">Your week.</h2>
+      <p className="ob-p">Rearrange however you want.</p>
 
       {showAddModal && (
         <div className="add-modal-bg" onClick={() => setShowAddModal(null)}>
@@ -1087,7 +1076,7 @@ function OB_Calendar() {
         <p className="ical-total">{totalActions} actions across the week</p>
         <button className={`btn-primary${totalActions === 0 ? " btn-off" : ""}`}
           onClick={confirmSchedule} disabled={totalActions === 0}>
-          Confirm my week
+          Confirm
         </button>
       </div>
     </div>
@@ -1102,8 +1091,8 @@ function OB_Ready() {
     <div className="ob-screen fade-in">
       <div className="ready-top">
         <div className="ready-ring pulse-ring"><span className="ready-check">✓</span></div>
-        <h2 className="ready-h">Your system<br />is ready.</h2>
-        <p className="ready-sub">One unified plan across {areas.length} areas of your life.</p>
+        <h2 className="ready-h">Ready.</h2>
+        <p className="ready-sub">{areas.length} areas. One plan. Let's go.</p>
       </div>
       <div className="ready-areas">
         {areas.map(a => (
@@ -1117,7 +1106,7 @@ function OB_Ready() {
         <p className="rpn">{weekPlan?.name}</p>
         <p className="rpp">{weekPlan?.philosophy}</p>
       </div>
-      <button className="btn-glow mt12" onClick={enterApp}>Start day one</button>
+      <button className="btn-glow mt12" onClick={enterApp}>Start</button>
     </div>
   );
 }
@@ -1153,8 +1142,8 @@ function TodayScreen() {
         <div className="comeback fade-in">
           <span>🌱</span>
           <div className="comeback-body">
-            <p className="cb-t">Welcome back.</p>
-            <p className="cb-s">Coming back is the hardest part. You showed up.</p>
+            <p className="cb-t">You're back.</p>
+            <p className="cb-s">That's the hardest part done.</p>
             <button className="cb-keep" onClick={() => setComebackMode(false)}>Let's go</button>
           </div>
         </div>
@@ -1198,7 +1187,7 @@ function TodayScreen() {
       {allDone && (
         <div className="all-done fade-in">
           <span style={{ fontSize: 34 }}>🔥</span>
-          <p className="done-msg">Today's plan: complete.</p>
+          <p className="done-msg">Done.</p>
           <button className="btn-secondary" onClick={() => setScreen("reflection")}>Evening check-in</button>
         </div>
       )}
@@ -1341,7 +1330,7 @@ function NudgesScreen() {
       <p className="eyebrow">Daily nudge · {DAY_FULL[weekDay]}</p>
       <div className="nudge-card fade-in">
         <span className="nudge-icon">🔑</span>
-        <p className="nudge-msg">{insight || "Every action you complete is a vote for who you are becoming."}</p>
+        <p className="nudge-msg">{insight || "Each action is a vote for who you're becoming."}</p>
       </div>
       <div className="nudge-status">
         <p className="ns-lbl">Today's actions</p>
@@ -1378,7 +1367,7 @@ function ReflectionScreen() {
           <textarea className="ob-input" rows={3} placeholder="Just for you." value={checkinNote} onChange={e => setCheckinNote(e.target.value)} />
         </div>
       )}
-      <p className="done-foot">1% better. See you tomorrow.</p>
+      <p className="done-foot">See you tomorrow.</p>
     </div>
   );
 
@@ -1406,7 +1395,7 @@ function ProgressScreen() {
   return (
     <div className="screen pad">
       <p className="eyebrow">Progress</p>
-      <h2 className="ob-h" style={{ fontSize: 26, marginBottom: 14 }}>Your journey</h2>
+      <h2 className="ob-h" style={{ fontSize: 26, marginBottom: 14 }}>Progress</h2>
 
       {extractedData?.identity && (
         <div className="id-card stagger-1"><span>🪞</span><div><p className="id-lbl">Identity</p><p className="id-txt">Becoming: <strong>a {extractedData.identity}</strong></p></div></div>
@@ -1418,7 +1407,7 @@ function ProgressScreen() {
         </div>
         <div className="cons-right">
           <p className="cons-det">{daysWithActivity} of {totalDaysTracked || 0} days active</p>
-          {showPct && <p className="cons-note">{consistencyPct}% beats 100% of people who never started.</p>}
+          {showPct && <p className="cons-note">Better than not starting.</p>}
         </div>
       </div>
 
@@ -1435,7 +1424,7 @@ function ProgressScreen() {
 
       {earnedMilestones.length > 0 && (
         <div className="milestones-card stagger-4">
-          <p className="sec-lbl">Milestones earned</p>
+          <p className="sec-lbl">Milestones</p>
           {earnedMilestones.map(m => (
             <div key={m.day} className="ms-row">
               <span className="ms-r-icon">{m.icon}</span>
@@ -1472,7 +1461,7 @@ function ReplanScreen() {
         <div className="gen-ring-2" />
         <div className="gen-ring-3" />
       </div>
-      <h3 className="gen-title" style={{ color: "#FAFAF8", marginTop: 20 }}>Planning next week</h3>
+      <h3 className="gen-title" style={{ color: "#FAFAF8", marginTop: 20 }}>Building next week</h3>
       <p style={{ fontSize: 13, color: "rgba(250,250,248,0.4)", marginTop: 6 }}>Based on how this week went.</p>
     </div>
   );
@@ -1505,7 +1494,7 @@ function ReplanScreen() {
   return (
     <div className="screen pad fade-in">
       <p className="eyebrow">New week</p>
-      <h2 className="ob-h">Pick your next plan.</h2>
+      <h2 className="ob-h">Next week.</h2>
       {planOptions?.map((plan, idx) => (
         <div key={idx} className={`plan-card${selectedPlanIdx === idx ? " plan-sel" : ""}`} style={{ marginBottom: 10 }}>
           <div className="plan-card-top" onClick={() => setViewing(idx)}>
@@ -1603,10 +1592,8 @@ const CSS = `
   --font-display:'Instrument Serif',serif;
   --font-body:'Satoshi',sans-serif;
 }
-.universe{min-height:100vh;background:#D6D3CC;display:flex;align-items:center;justify-content:center;font-family:var(--font-body);padding:24px 0;}
-.phone{width:390px;height:780px;background:var(--bg);border-radius:52px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 32px 80px rgba(0,0,0,0.22);}
-.sb{display:flex;justify-content:space-between;align-items:center;padding:14px 24px 2px;flex-shrink:0;}.sb-t{font-size:12px;font-weight:600;color:var(--ink);}.sb-notch{width:80px;height:24px;background:var(--ink);border-radius:12px;}.sb-r{font-size:11px;color:#AAA;}
-.screen-area{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;}.screen-area::-webkit-scrollbar{display:none;}
+.app-root{width:100%;max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;font-family:var(--font-body);position:relative;}
+.screen-area{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-top:env(safe-area-inset-top);}.screen-area::-webkit-scrollbar{display:none;}
 .screen{min-height:100%;display:flex;flex-direction:column;}.pad{padding:20px 22px;}
 
 /* Animations */
@@ -1874,7 +1861,7 @@ const CSS = `
 .chat-ready-hint{font-size:11px;color:var(--muted);margin-top:6px;}
 
 /* Nav */
-.bnav{display:flex;background:var(--bg);border-top:1px solid var(--border);padding:10px 0 22px;flex-shrink:0;}
+.bnav{display:flex;background:var(--bg);border-top:1px solid var(--border);padding:10px 0 calc(10px + env(safe-area-inset-bottom));flex-shrink:0;position:sticky;bottom:0;}
 .nbtn{flex:1;background:none;border:none;cursor:pointer;padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0.26;transition:0.15s;}.nbtn-on{opacity:1;}
 .nico{font-size:18px;color:var(--ink);}.nlbl{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink);font-weight:600;}
 `;
