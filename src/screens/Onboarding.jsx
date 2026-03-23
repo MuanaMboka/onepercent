@@ -8,6 +8,7 @@ export default function Onboarding() {
   return (
     <div className="screen">
       {obPhase === "areas" && <OB_Areas />}
+      {obPhase === "preview" && <OB_Preview />}
       {obPhase === "chat" && <OB_Chat />}
       {obPhase === "struggles" && <OB_Struggles />}
       {obPhase === "habits" && <OB_Habits />}
@@ -18,7 +19,7 @@ export default function Onboarding() {
 }
 
 function OB_Areas() {
-  const { selectedAreas, toggleArea, startChat } = useApp();
+  const { selectedAreas, toggleArea, showPreview } = useApp();
   return (
     <div className="ob-screen fade-in">
       <ObProgress step={1} total={6} />
@@ -46,8 +47,61 @@ function OB_Areas() {
       )}
 
       <button className={`btn-primary mt16${selectedAreas.length === 0 ? " btn-off" : ""}`}
-        onClick={startChat} disabled={selectedAreas.length === 0}>
+        onClick={showPreview} disabled={selectedAreas.length === 0}>
         Continue
+      </button>
+    </div>
+  );
+}
+
+const PREVIEW_HABITS = {
+  health:    [{ action: "Do 20 bodyweight squats", identity: "I am a daily mover", twoMin: "Do 3 squats" }],
+  career:    [{ action: "Work on top priority for 25 min", identity: "I am someone who ships", twoMin: "Open the doc and write one line" }],
+  spiritual: [{ action: "5 minutes of quiet reflection", identity: "I am a reflective person", twoMin: "Sit and take 3 deep breaths" }],
+  relations: [{ action: "Send a thoughtful message to someone", identity: "I am someone who shows up", twoMin: "Open messages and pick one person" }],
+  growth:    [{ action: "Read 10 pages of a book", identity: "I am a lifelong learner", twoMin: "Open book to your bookmark" }],
+  fun:       [{ action: "Spend 15 minutes on a creative project", identity: "I am a creative person", twoMin: "Open your project and look at it" }],
+};
+
+function OB_Preview() {
+  const { selectedAreas, startChat, skipChat } = useApp();
+  const previewItems = selectedAreas.map(aId => {
+    const area = LIFE_AREAS.find(a => a.id === aId);
+    const habit = PREVIEW_HABITS[aId]?.[0];
+    return { area, habit };
+  }).filter(p => p.area && p.habit);
+
+  return (
+    <div className="ob-screen fade-in">
+      <ObProgress step={2} total={6} />
+      <p className="ob-eye">Your first day could look like</p>
+      <h2 className="ob-h">Here's a start.</h2>
+
+      <div className="preview-habits stagger-1">
+        {previewItems.map(({ area, habit }) => (
+          <div key={area.id} className="preview-habit-card">
+            <div className="ph-left">
+              <div className="ph-circle" style={{ borderColor: area.color }}>
+                <span>{area.icon}</span>
+              </div>
+            </div>
+            <div className="ph-right">
+              <span className="ph-area" style={{ color: area.color }}>{area.label}</span>
+              <span className="ph-action">{habit.action}</span>
+              <span className="ph-identity">{habit.identity}</span>
+              <span className="ph-fallback">Hard day: {habit.twoMin}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="preview-note stagger-2">We keep it small so you actually sustain it.</p>
+
+      <button className="btn-primary mt16 stagger-3" onClick={skipChat}>
+        This works, next
+      </button>
+      <button className="ghost-btn stagger-4" onClick={startChat}>
+        Personalize with AI coach
       </button>
     </div>
   );
@@ -309,7 +363,7 @@ function OB_Calendar() {
       {showAddModal && (
         <div className="add-modal-bg" onClick={() => setShowAddModal(null)}>
           <div className="add-modal" onClick={e => e.stopPropagation()}>
-            <p className="am-title">Add to {DAY_FULL[DAYS.indexOf(showAddModal.day.charAt(0).toUpperCase() + showAddModal.day.slice(1))] || showAddModal.day} — {slotLabels[showAddModal.slot]}</p>
+            <p className="am-title">Add to {DAY_FULL[DAYS.indexOf(showAddModal.day.charAt(0).toUpperCase() + showAddModal.day.slice(1))] || showAddModal.day} · {slotLabels[showAddModal.slot]}</p>
             {userHabits.map(h => {
               const area = LIFE_AREAS.find(a => a.id === h.area);
               return (

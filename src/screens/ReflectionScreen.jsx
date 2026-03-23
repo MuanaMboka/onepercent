@@ -43,7 +43,7 @@ export default memo(function ReflectionScreen() {
       </div>
       <h2 className="done-h slide-up">{doneMsg}</h2>
       <p className="done-day slide-up">Day {dayNumber} · {CHECKIN_RESPONSES[checkinChoice]}</p>
-      {partialCount > 0 && <p className="done-partial slide-up">+{partialCount} partial — that counts too.</p>}
+      {partialCount > 0 && <p className="done-partial slide-up">+{partialCount} partial. That counts too.</p>}
       {showWritePrompt && (
         <div className="write-box slide-up">
           <p className="wb-label">Anything on your mind? (optional)</p>

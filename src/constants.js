@@ -77,6 +77,6 @@ export const STRUGGLE_SOLUTIONS = {
   motivation: { icon: "🪞", solution: "Identity statements remind you who you're becoming, not just what to do." },
   time: { icon: "⏱️", solution: "Every habit has a 2-minute fallback for busy days." },
   overwhelm: { icon: "📋", solution: "Max 3-5 actions per day, spread across time slots." },
-  forgetting: { icon: "🔔", solution: "Triggers tied to things you already do — so habits ride existing routines." },
+  forgetting: { icon: "🔔", solution: "Triggers tied to things you already do, so habits ride existing routines." },
   perfectionism: { icon: "½", solution: "Partial completions count. Half is always better than zero." },
 };

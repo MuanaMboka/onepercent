@@ -1,7 +1,8 @@
-import { memo } from "react";
+import { memo, useState, useCallback, useMemo } from "react";
 import { DAYS, DAY_FULL, LIFE_AREAS, CHECKIN_RESPONSES } from "../constants.js";
 import { useApp } from "../App.jsx";
 import { ProgressRing } from "../components/shared.jsx";
+import { getDailyGreeting, getCompletionMessage, getAllDoneCelebration, getPartialNudge } from "../utils/variableRewards.js";
 
 export default memo(function TodayScreen() {
   const {
@@ -11,10 +12,32 @@ export default memo(function TodayScreen() {
     completedCount, partialCount, totalActions, setScreen,
     isReturning, setIsReturning, comebackMode, setComebackMode,
     simulateDay, weekPlan, startReplanning, milestone, dismissMilestone,
-    extractedData,
+    extractedData, consistencyPct, daysWithActivity, totalDaysTracked,
+    currentStreak,
   } = useApp();
   const allDone = completedCount === totalActions && totalActions > 0;
   const pct = totalActions > 0 ? Math.round((completedCount / totalActions) * 100) : 0;
+  const [showWeek, setShowWeek] = useState(false);
+  const [justCompleted, setJustCompleted] = useState(null);
+
+  const greeting = useMemo(() => getDailyGreeting(dayNumber, currentStreak), [dayNumber, currentStreak]);
+  const allDoneCelebration = useMemo(() => getAllDoneCelebration(dayNumber), [dayNumber]);
+  const partialNudge = useMemo(() => getPartialNudge(dayNumber), [dayNumber]);
+
+  const handleComplete = useCallback((i) => {
+    toggleComplete(i);
+    const action = todayActions[i];
+    if (action && !checked[i]) {
+      const isLast = completedCount + 1 === totalActions;
+      const msg = getCompletionMessage(dayNumber, i, action.identity, isLast);
+      setJustCompleted({ idx: i, message: msg });
+      setTimeout(() => setJustCompleted(null), 2200);
+    }
+  }, [toggleComplete, todayActions, checked, completedCount, totalActions, dayNumber]);
+
+  const consistencyLabel = totalDaysTracked < 7
+    ? `${daysWithActivity}/${totalDaysTracked || dayNumber} days active`
+    : `${consistencyPct}% consistency`;
 
   return (
     <div className="screen pad">
@@ -34,7 +57,8 @@ export default memo(function TodayScreen() {
           <span>🌱</span>
           <div className="comeback-body">
             <p className="cb-t">You're back.</p>
-            <p className="cb-s">That's the hardest part done.</p>
+            <p className="cb-s">Yesterday was neutral. Today counts normally.</p>
+            <p className="cb-hint">Start with just the 2-min versions if you need to.</p>
             <button className="cb-keep" onClick={() => setComebackMode(false)}>Let's go</button>
           </div>
         </div>
@@ -42,27 +66,40 @@ export default memo(function TodayScreen() {
 
       {isReturning && !comebackMode && (
         <div className="return-banner fade-in">
-          <span>👋</span><div><p className="ret-t">Welcome back.</p></div>
+          <span>👋</span>
+          <div>
+            <p className="ret-t">Welcome back.</p>
+            <p className="ret-s">Pick up where you left off. No penalty.</p>
+          </div>
           <button className="ret-x" onClick={() => setIsReturning(false)}>×</button>
         </div>
       )}
 
       <div className="today-top">
-        <p className="eyebrow">{DAY_FULL[weekDay]} · Day {dayNumber}</p>
-        {weekPlan && <p className="today-plan">📋 {weekPlan.name}</p>}
-      </div>
-
-      <div className="pstrip">
-        <ProgressRing done={completedCount} total={totalActions} size={68} />
-        <div className="pstrip-mid">
-          <span className="pbig">{completedCount}<span className="ptot">/{totalActions}</span></span>
-          <p className="plbl">done today</p>
-          {partialCount > 0 && <p className="plbl-p">+{partialCount} partial</p>}
+        <div className="today-eyebrow-row">
+          <p className="eyebrow">{DAY_FULL[weekDay]} · Day {dayNumber}</p>
+          <p className="daily-greeting">{greeting}</p>
         </div>
-        <div className="pct-badge">{pct}%</div>
+        <div className="today-header-row">
+          <div className="today-header-left">
+            <ProgressRing done={completedCount} total={totalActions} size={48} />
+            <div className="today-header-stats">
+              <span className="today-done-count">{completedCount}<span className="today-done-total">/{totalActions}</span></span>
+              {partialCount > 0 && <span className="today-partial-tag">+{partialCount} partial</span>}
+            </div>
+          </div>
+          <div className="today-consistency-pill">
+            <span className="tcp-value">{consistencyLabel}</span>
+          </div>
+        </div>
       </div>
 
-      <WeekCalendar />
+      {justCompleted && (
+        <div className="identity-toast fade-in" key={justCompleted.idx}>
+          <span className="it-check">✓</span>
+          <span className="it-text">{justCompleted.message}</span>
+        </div>
+      )}
 
       <div className="action-list">
         {todayActions.map((a, i) => (
@@ -70,18 +107,30 @@ export default memo(function TodayScreen() {
             done={!!checked[i]} partial={!!partialChecked[i]}
             expanded={expandedAction === i}
             onExpand={() => setExpandedAction(expandedAction === i ? null : i)}
-            onComplete={() => toggleComplete(i)}
+            onComplete={() => handleComplete(i)}
             onPartial={() => togglePartial(i)} />
         ))}
       </div>
 
-      {(completedCount > 0 || partialCount > 0) && (
+      {allDone && (
         <div className="all-done fade-in">
-          <span style={{ fontSize: 34 }}>{allDone ? "🔥" : "💪"}</span>
-          <p className="done-msg">{allDone ? "Done." : "Nice progress!"}</p>
+          <span style={{ fontSize: 34 }}>{allDoneCelebration.icon}</span>
+          <p className="done-msg">{allDoneCelebration.message}</p>
           <button className="btn-secondary" onClick={() => setScreen("reflection")}>Evening check-in</button>
         </div>
       )}
+
+      {!allDone && (completedCount > 0 || partialCount > 0) && (
+        <div className="checkin-nudge fade-in">
+          <p className="nudge-text">{partialNudge}</p>
+          <button className="btn-secondary" onClick={() => setScreen("reflection")}>Evening check-in</button>
+        </div>
+      )}
+
+      <button className="week-toggle" onClick={() => setShowWeek(v => !v)}>
+        {showWeek ? "Hide week" : "See this week"} <span className="wt-arrow">{showWeek ? "▲" : "▼"}</span>
+      </button>
+      {showWeek && <WeekCalendar />}
 
       {tomorrowActions.length > 0 && (
         <div className="tomorrow-peek">

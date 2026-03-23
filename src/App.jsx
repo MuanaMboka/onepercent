@@ -4,6 +4,7 @@ import { buildCoachSystemPrompt, buildExtractionPrompt, buildUnifiedPlanPrompt, 
 import { CSS } from "./styles.js";
 import { chat, chatJSON, parseCoachResponse } from "./services/aiService.js";
 import { readAll, writeSlice, migrateLegacy } from "./services/storageService.js";
+import { getTodayISO, getWeekDayFromISO, daysBetween } from "./utils/dateUtils.js";
 import { trackScreenView, trackHabitComplete, trackSessionStart } from "./services/eventService.js";
 import { uiReducer, createUiInitialState, UI_ACTIONS } from "./reducers/uiReducer.js";
 import { onboardingReducer, createObInitialState, OB_ACTIONS } from "./reducers/onboardingReducer.js";
@@ -47,6 +48,7 @@ function saveState(data) {
     checked: data.checked, partialChecked: data.partialChecked,
     completionHistory: data.completionHistory, checkinDone: data.checkinDone,
     checkinChoice: data.checkinChoice, checkinNote: data.checkinNote,
+    startDate: data.startDate, lastActiveDate: data.lastActiveDate,
   });
   writeSlice("ui", {
     screen: data.screen, uspSlide: data.uspSlide,
@@ -63,6 +65,104 @@ function AppProvider({ children }) {
   const [ob, dOB] = useReducer(onboardingReducer, createObInitialState(saved));
   const [plan, dPlan] = useReducer(planReducer, createPlanInitialState(saved));
   const [daily, dDaily] = useReducer(dailyReducer, createDailyInitialState(saved));
+
+  // ── Auto-advance based on real date ──────────────────────────────────────
+  const autoAdvanceRef = useRef(false);
+  useEffect(() => {
+    if (autoAdvanceRef.current) return;
+    autoAdvanceRef.current = true;
+
+    const todayISO = getTodayISO();
+    const realWeekDay = getWeekDayFromISO(todayISO);
+
+    // If no startDate yet but app has a plan, backfill startDate
+    if (!daily.startDate && plan.weekPlan) {
+      dDaily({ type: DAILY_ACTIONS.SET_START_DATE, payload: todayISO });
+      dDaily({ type: DAILY_ACTIONS.SET_WEEK_DAY, payload: realWeekDay });
+      return;
+    }
+
+    // If no plan yet (still onboarding), just keep weekDay synced
+    if (!plan.weekPlan || !daily.startDate) {
+      if (daily.weekDay !== realWeekDay) {
+        dDaily({ type: DAILY_ACTIONS.SET_WEEK_DAY, payload: realWeekDay });
+      }
+      return;
+    }
+
+    // Calculate expected day number from startDate
+    const daysSinceStart = daysBetween(daily.startDate, todayISO);
+    const expectedDayNumber = daysSinceStart + 1; // day 1 = startDate
+
+    if (expectedDayNumber <= daily.dayNumber) {
+      // Same day or clock went backwards — just sync weekDay
+      if (daily.weekDay !== realWeekDay) {
+        dDaily({ type: DAILY_ACTIONS.SET_WEEK_DAY, payload: realWeekDay });
+      }
+      return;
+    }
+
+    // New day(s) detected — need to advance
+    const daysMissed = expectedDayNumber - daily.dayNumber;
+    const historyEntries = [];
+
+    // Save the last active day's progress (what the user actually did)
+    const lastDayChecked = daily.checked || {};
+    const lastDayPartial = daily.partialChecked || {};
+    const lastDayKey = DAYS[daily.weekDay].toLowerCase();
+    const lastDayActions = plan.weekPlan?.days?.[lastDayKey] || [];
+    const lastCompleted = lastDayActions.filter((_, i) => lastDayChecked[i]).length;
+    const lastPartial = lastDayActions.filter((_, i) => !lastDayChecked[i] && lastDayPartial[i]).length;
+
+    historyEntries.push({
+      day: daily.dayNumber,
+      date: daily.lastActiveDate || daily.startDate,
+      completed: lastCompleted,
+      partial: lastPartial,
+      total: lastDayActions.length,
+      mood: daily.checkinChoice,
+    });
+
+    // Fill gaps for completely missed days (if user was away >1 day)
+    for (let d = 1; d < daysMissed; d++) {
+      const missedDayNum = daily.dayNumber + d;
+      const missedWeekDay = (daily.weekDay + d) % 7;
+      const missedDayKey = DAYS[missedWeekDay].toLowerCase();
+      const missedActions = plan.weekPlan?.days?.[missedDayKey] || [];
+      historyEntries.push({
+        day: missedDayNum,
+        date: null,
+        completed: 0,
+        partial: 0,
+        total: missedActions.length,
+        mood: null,
+      });
+    }
+
+    const milestone = MILESTONES.find(m => m.day === expectedDayNumber);
+
+    dDaily({ type: DAILY_ACTIONS.AUTO_ADVANCE, payload: {
+      newDayNumber: expectedDayNumber,
+      newWeekDay: realWeekDay,
+      todayISO,
+      historyEntries,
+      milestone,
+      daysMissed,
+    }});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Re-check date when user returns to tab (PWA background resume) ──────
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState !== "visible" || !plan.weekPlan || !daily.startDate) return;
+      const todayISO = getTodayISO();
+      if (todayISO === daily.lastActiveDate) return;
+      // Date changed — reload to trigger auto-advance cleanly
+      window.location.reload();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [plan.weekPlan, daily.startDate, daily.lastActiveDate]);
 
   // ── Custom hooks for derived state ────────────────────────────────────────
   const { todayKey, tomorrowKey, todayActions, tomorrowActions } = useTodayPlan(plan.weekPlan, daily.weekDay);
@@ -106,6 +206,7 @@ function AppProvider({ children }) {
       checked: daily.checked, partialChecked: daily.partialChecked,
       completionHistory: daily.completionHistory, checkinDone: daily.checkinDone,
       checkinChoice: daily.checkinChoice, checkinNote: daily.checkinNote,
+      startDate: daily.startDate, lastActiveDate: daily.lastActiveDate,
     });
   }, [ui, ob, plan, daily]);
 
@@ -113,6 +214,10 @@ function AppProvider({ children }) {
   const toggleArea = useCallback(id => dOB({ type: OB_ACTIONS.TOGGLE_AREA, payload: id }), []);
 
   // ── Chat with coach ────────────────────────────────────────────────────────
+  function showPreview() {
+    dOB({ type: OB_ACTIONS.SET_PHASE, payload: "preview" });
+  }
+
   async function startChat() {
     dOB({ type: OB_ACTIONS.SET_PHASE, payload: "chat" });
     if (ob.chatMessages.length > 0) return;
@@ -134,6 +239,18 @@ function AppProvider({ children }) {
     } finally { dOB({ type: OB_ACTIONS.SET_CHAT_LOADING, payload: false }); }
   }
 
+  function skipChat() {
+    dOB({ type: OB_ACTIONS.SET_EXTRACTED_DATA, payload: {
+      identities: ob.selectedAreas.slice(0, 3).map(a => ({
+        identity: `I am a ${LIFE_AREAS.find(la => la.id === a)?.label?.split(" ")[0]?.toLowerCase() || "growing"} person`,
+        areas: [a], goal: "Improve in this area", struggle: "consistency", routine_context: ""
+      })),
+      goals: ob.selectedAreas.map(a => ({ area: a, goal: "Improve in this area", struggle: "consistency", routine_context: "" })),
+      available_time: 30, daily_routine: "standard morning-to-evening", key_insight: "Starting is the hardest part"
+    }});
+    dOB({ type: OB_ACTIONS.SET_PHASE, payload: "struggles" });
+  }
+
   async function sendChat() {
     const msg = ob.chatInput.trim();
     if (!msg || ob.chatLoading) return;
@@ -152,7 +269,7 @@ function AppProvider({ children }) {
       dOB({ type: OB_ACTIONS.APPEND_CHAT_MESSAGE, payload: { role: "assistant", content: text } });
       if (isReady) dOB({ type: OB_ACTIONS.SET_COACH_READY, payload: true });
     } catch (e) {
-      dOB({ type: OB_ACTIONS.APPEND_CHAT_MESSAGE, payload: { role: "assistant", content: "Sorry, I had a moment — could you try sending that again? I want to make sure I get this right for you." } });
+      dOB({ type: OB_ACTIONS.APPEND_CHAT_MESSAGE, payload: { role: "assistant", content: "Sorry, I had a moment. Could you try sending that again? I want to make sure I get this right for you." } });
     } finally { dOB({ type: OB_ACTIONS.SET_CHAT_LOADING, payload: false }); }
   }
 
@@ -343,6 +460,10 @@ function AppProvider({ children }) {
 
   function enterApp() {
     if (!plan.weekPlan) return;
+    const todayISO = getTodayISO();
+    const realWeekDay = getWeekDayFromISO(todayISO);
+    dDaily({ type: DAILY_ACTIONS.SET_START_DATE, payload: todayISO });
+    dDaily({ type: DAILY_ACTIONS.SET_WEEK_DAY, payload: realWeekDay });
     dDaily({ type: DAILY_ACTIONS.RESET_DAY });
     dUI({ type: UI_ACTIONS.SET_EXPANDED_ACTION, payload: null });
     dUI({ type: UI_ACTIONS.SET_SCREEN, payload: "today" });
@@ -376,10 +497,12 @@ function AppProvider({ children }) {
     const p = todayActions.filter((_, i) => !daily.checked[i] && daily.partialChecked[i]).length;
     const newDay = daily.dayNumber + offset;
     const hit = MILESTONES.find(m => m.day === newDay);
+    const todayISO = getTodayISO();
     dDaily({ type: DAILY_ACTIONS.ADVANCE_DAY, payload: {
       offset,
-      historyEntry: { day: daily.dayNumber, completed: c, partial: p, total: todayActions.length, mood: daily.checkinChoice },
+      historyEntry: { day: daily.dayNumber, date: todayISO, completed: c, partial: p, total: todayActions.length, mood: daily.checkinChoice },
       milestone: hit,
+      todayISO,
     }});
     dUI({ type: UI_ACTIONS.SET_EXPANDED_ACTION, payload: null });
   }
@@ -459,7 +582,7 @@ RE-PLANNING RULES:
     obPhase: ob.obPhase, setObPhase,
     selectedAreas: ob.selectedAreas, toggleArea,
     chatMessages: ob.chatMessages, chatInput: ob.chatInput, setChatInput,
-    chatLoading: ob.chatLoading, sendChat, startChat,
+    chatLoading: ob.chatLoading, sendChat, startChat, showPreview, skipChat,
     coachReady: ob.coachReady, finishChat,
     extracting: ob.extracting, extractedData: ob.extractedData,
     struggles: ob.struggles, toggleStruggle,

@@ -16,6 +16,8 @@ export const DAILY_ACTIONS = {
   SET_MILESTONE: "daily/SET_MILESTONE",
   ADVANCE_DAY: "daily/ADVANCE_DAY",
   RESET_DAY: "daily/RESET_DAY",
+  AUTO_ADVANCE: "daily/AUTO_ADVANCE",
+  SET_START_DATE: "daily/SET_START_DATE",
 };
 
 export function createDailyInitialState(saved) {
@@ -32,6 +34,8 @@ export function createDailyInitialState(saved) {
     comebackMode: false,
     isReturning: false,
     milestone: null,
+    startDate: saved?.startDate || null,
+    lastActiveDate: saved?.lastActiveDate || null,
   };
 }
 
@@ -90,6 +94,7 @@ export function dailyReducer(state, action) {
         comebackMode: offset >= 3,
         isReturning: offset > 1,
         milestone: hit || null,
+        lastActiveDate: action.payload.todayISO || state.lastActiveDate,
       };
     }
     case DAILY_ACTIONS.RESET_DAY:
@@ -100,6 +105,28 @@ export function dailyReducer(state, action) {
         checkinDone: false,
         checkinChoice: null,
       };
+    case DAILY_ACTIONS.SET_START_DATE:
+      return { ...state, startDate: action.payload, lastActiveDate: action.payload };
+    case DAILY_ACTIONS.AUTO_ADVANCE: {
+      // payload: { newDayNumber, newWeekDay, todayISO, historyEntries, milestone }
+      const { newDayNumber, newWeekDay, todayISO, historyEntries, milestone: hit, daysMissed } = action.payload;
+      return {
+        ...state,
+        dayNumber: newDayNumber,
+        weekDay: newWeekDay,
+        lastActiveDate: todayISO,
+        completionHistory: [...state.completionHistory, ...historyEntries],
+        checked: {},
+        partialChecked: {},
+        checkinDone: false,
+        checkinChoice: null,
+        checkinNote: "",
+        showWritePrompt: false,
+        comebackMode: daysMissed >= 3,
+        isReturning: daysMissed > 1,
+        milestone: hit || null,
+      };
+    }
     default:
       return state;
   }
